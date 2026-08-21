@@ -11,7 +11,6 @@ st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layo
 # ==========================================
 st.markdown("""
 <style>
-    /* ตกแต่งกล่องตัวเลข KPI ให้มีกรอบและเงา (Card Style) */
     div[data-testid="metric-container"] {
         background-color: #ffffff;
         border: 1px solid #f0f2f6;
@@ -19,17 +18,14 @@ st.markdown("""
         border-radius: 10px;
         box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.08);
     }
-    /* ปรับสีตัวอักษรหัวข้อ KPI */
     div[data-testid="metric-container"] > label {
         color: #555555 !important;
         font-size: 1.05rem !important;
         font-weight: bold;
     }
-    /* ปรับสีตัวเลข KPI ให้เป็นโทนสีกรมท่าที่ดูน่าเชื่อถือ */
     div[data-testid="metric-container"] > div {
         color: #003f5c !important; 
     }
-    /* ซ่อนลายน้ำของ Streamlit ด้านล่าง */
     footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
@@ -78,7 +74,6 @@ def load_data_from_upload(file):
 
 df = None
 
-# โหลดข้อมูล
 if data_source == "อัปโหลดไฟล์ (CSV)":
     uploaded_file = st.sidebar.file_uploader("อัปโหลดไฟล์ยอดขาย", type=['csv'])
     if uploaded_file is not None:
@@ -103,7 +98,6 @@ if df is not None:
     required_cols = ['GRANDTOTAL', 'NAME']
     if all(col in df.columns for col in required_cols):
         
-        # --- แปลงวันที่ ---
         if 'CF_TRANDATE' in df.columns:
             def parse_thai_date(date_str):
                 try:
@@ -119,7 +113,6 @@ if df is not None:
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
-        # กรองวันที่
         if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
             min_date = df['Parsed_Date'].min().date()
             max_date = df['Parsed_Date'].max().date()
@@ -136,7 +129,6 @@ if df is not None:
                 start_date, end_date = date_range
                 df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
             
-            # กรองเดือน
             st.sidebar.markdown("**🗓️ กรองตามเดือน**")
             all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
             month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
@@ -151,7 +143,6 @@ if df is not None:
             if selected_months:
                 df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
         
-        # กรองสาขา
         st.sidebar.markdown("**🏢 กรองตามสาขา**")
         all_branches = df['NAME'].dropna().unique()
         selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
@@ -161,7 +152,6 @@ if df is not None:
         else:
             df_filtered = df[df['NAME'].isin(selected_branches)]
 
-            # 📊 ส่วนแสดง KPI
             total_sales = df_filtered['GRANDTOTAL'].sum()
             total_orders = len(df_filtered)
             
@@ -171,9 +161,8 @@ if df is not None:
             if total_orders > 0:
                 col3.metric("ยอดเฉลี่ยต่อบิล (บาท)", f"฿{(total_sales/total_orders):,.2f}")
             
-            st.markdown("<br>", unsafe_allow_html=True) # เว้นบรรทัดนิดนึงให้ดูโปร่งขึ้น
+            st.markdown("<br>", unsafe_allow_html=True) 
 
-            # โทนสีสำหรับผู้บริหาร (Executive Modern Palette)
             executive_colors = ['#003f5c', '#2f4b7c', '#665191', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600']
 
             tab1, tab2, tab3 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข"])
@@ -188,7 +177,6 @@ if df is not None:
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
                                      color_discrete_sequence=executive_colors,
                                      text_auto=',.2f', title="ยอดขาย (กราฟแท่ง)")
-                    # ทำให้กราฟดูสะอาดขึ้น ซ่อนเส้น Grid ที่ไม่จำเป็น
                     fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)",
                                           plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                                           yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
@@ -198,7 +186,6 @@ if df is not None:
                     fig_pie = px.pie(branch_sales, values='GRANDTOTAL', names='NAME', 
                                      color_discrete_sequence=executive_colors,
                                      title="สัดส่วนยอดขาย (กราฟโดนัท)", hole=0.45)
-                    # ให้ข้อความชี้เปอร์เซ็นต์อยู่ด้านในวงกลม
                     fig_pie.update_traces(textposition='inside', textinfo='percent+label')
                     fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_pie, use_container_width=True)
@@ -213,9 +200,8 @@ if df is not None:
                     except:
                         pass
                     
-                    # เปลี่ยนกราฟเส้นเป็น Plotly เพื่อให้โค้งสวยงามและหรูหราขึ้น
                     fig_line = px.line(daily_trend, x='CF_TRANDATE', y='GRANDTOTAL', 
-                                       markers=True, line_shape='spline') # spline ทำให้เส้นโค้งมน
+                                       markers=True, line_shape='spline') 
                     fig_line.update_traces(line_color='#2f4b7c', line_width=3, marker_size=8)
                     fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)",
                                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
@@ -225,14 +211,13 @@ if df is not None:
                 else:
                     st.info("ไม่มีคอลัมน์ 'CF_TRANDATE'")
 
-          with tab3:
+            with tab3:
                 st.subheader("รายละเอียดยอดขาย")
                 display_df = branch_sales.rename(columns={
                     'NAME': 'ชื่อสาขา', 
                     'GRANDTOTAL': 'ยอดขายทั้งสิ้น'
                 })
                 
-                # เพิ่มลูกเล่นสีแรเงา (Background Gradient) ให้กับคอลัมน์ตัวเลข
                 styled_df = (display_df.style
                              .format({'ยอดขายทั้งสิ้น': '{:,.2f}'})
                              .background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']))
