@@ -224,26 +224,59 @@ if df is not None:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
             # แท็บใหม่: วิเคราะห์สินค้า
+            # ==========================================
+            # แท็บ 4: วิเคราะห์สินค้า (20 อันดับ ยอดขาย vs จำนวน)
+            # ==========================================
             with tab4:
-                st.subheader("🏆 10 อันดับสินค้าขายดี (จากไฟล์ product data.CSV)")
-                if df_product is not None and 'ITEMNAME' in df_product.columns and 'AMOUNT' in df_product.columns:
-                    # รวมมูลค่าขายตามชื่อสินค้า
-                    top_products = df_product.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
-                    top_products = top_products.sort_values('AMOUNT', ascending=False).head(10)
+                st.subheader("🏆 20 อันดับสินค้าขายดี (Top 20 Products)")
+                
+                if df_product is not None and 'ITEMNAME' in df_product.columns and 'AMOUNT' in df_product.columns and 'BASEQUANTITY' in df_product.columns:
                     
-                    # สร้างกราฟแท่งแนวนอน (Horizontal Bar) จะทำให้อ่านชื่อเมนูง่ายขึ้น
-                    fig_prod = px.bar(top_products, x='AMOUNT', y='ITEMNAME', orientation='h',
-                                      text_auto=',.0f', color='AMOUNT', color_continuous_scale='Blues')
+                    # แบ่งหน้าจอเป็น 2 ฝั่ง
+                    col_amount, col_qty = st.columns(2)
+                    chart_config = {'staticPlot': True}
                     
-                    fig_prod.update_layout(yaxis={'categoryorder':'total ascending'}, 
-                                           xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
-                                           plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-                    
-                    st.plotly_chart(fig_prod, use_container_width=True, config={'staticPlot': True})
-                else:
-                    st.warning("รอข้อมูลจากไฟล์ product data.CSV")
+                    # ------------------------------------
+                    # ฝั่งซ้าย: 20 อันดับตาม "มูลค่าขาย (บาท)"
+                    # ------------------------------------
+                    with col_amount:
+                        st.markdown("**💰 จัดอันดับตาม 'มูลค่าขาย (บาท)'**")
+                        # คำนวณรวมมูลค่า แล้วดึง 20 อันดับแรก
+                        top_amount = df_product.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
+                        top_amount = top_amount.sort_values('AMOUNT', ascending=False).head(20)
+                        
+                        # สร้างกราฟแท่งแนวนอน (ใช้สีโทนฟ้า-น้ำเงิน)
+                        fig_amount = px.bar(top_amount, x='AMOUNT', y='ITEMNAME', orientation='h',
+                                          text_auto=',.2f', color='AMOUNT', color_continuous_scale='Blues')
+                        
+                        fig_amount.update_layout(
+                            yaxis={'categoryorder':'total ascending'}, # เรียงจากมากอยู่บน
+                            xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
+                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                            coloraxis_showscale=False, height=600 # ซ่อนแถบสีและปรับความสูงกราฟ
+                        )
+                        st.plotly_chart(fig_amount, use_container_width=True, config=chart_config)
 
-    else:
-        st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
-else:
-    st.error("❌ ไม่พบไฟล์ sales data.CSV กรุณาตรวจสอบว่าอัปโหลดไฟล์ใน GitHub ครบถ้วน")
+                    # ------------------------------------
+                    # ฝั่งขวา: 20 อันดับตาม "จำนวนที่ขาย (ชิ้น)"
+                    # ------------------------------------
+                    with col_qty:
+                        st.markdown("**📦 จัดอันดับตาม 'จำนวนที่ขาย (ชิ้น)'**")
+                        # คำนวณรวมจำนวนที่ขาย แล้วดึง 20 อันดับแรก
+                        top_qty = df_product.groupby('ITEMNAME')['BASEQUANTITY'].sum().reset_index()
+                        top_qty = top_qty.sort_values('BASEQUANTITY', ascending=False).head(20)
+                        
+                        # สร้างกราฟแท่งแนวนอน (ใช้สีโทนส้มแดง จะได้แยกความแตกต่างชัดเจน)
+                        fig_qty = px.bar(top_qty, x='BASEQUANTITY', y='ITEMNAME', orientation='h',
+                                          text_auto=',.0f', color='BASEQUANTITY', color_continuous_scale='Oranges')
+                        
+                        fig_qty.update_layout(
+                            yaxis={'categoryorder':'total ascending'}, 
+                            xaxis_title="จำนวนที่ขาย (ชิ้น)", yaxis_title="",
+                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                            coloraxis_showscale=False, height=600
+                        )
+                        st.plotly_chart(fig_qty, use_container_width=True, config=chart_config)
+                        
+                else:
+                    st.warning("⚠️ รอข้อมูลจากไฟล์ product data.CSV หรือข้อมูลคอลัมน์ไม่ครบถ้วน")
