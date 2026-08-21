@@ -197,6 +197,6 @@ if df is not None:
                     display_df.style.format({'ยอดขายทั้งสิ้น': '{:,.2f}'}), 
                     use_container_width=True
                 )
-                )
+               
     else:
         st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
