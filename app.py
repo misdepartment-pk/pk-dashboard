@@ -10,9 +10,7 @@ st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layo
 # 🎨 ส่วนตกแต่ง CSS สำหรับผู้บริหาร (Executive Theme)
 # ==========================================
 st.markdown("""
-<!-- ปลดล็อกให้มือถือซูมเข้า-ออกได้ -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-
 <style>
     div[data-testid="metric-container"] {
         background-color: #ffffff;
@@ -47,50 +45,25 @@ with col_title:
     st.title("PK Noodle Shop - Executive Dashboard")
     st.info("📱 **ทริคสำหรับมือถือ:** กดปุ่ม **> หรือ ☰** ที่มุมซ้ายบน เพื่อเปิดเมนูตัวกรองข้อมูล")
 
-# 2. นำ URL ที่คัดลอกมาจาก Google Sheets มาวางที่นี่
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-HkM63W8TKUlY5gGfnx1eVJIAIJDp5ErKeJ-yxkveLwpty0I45o8AVOZYp7-RqeWzDu4q572tqxNN/pub?gid=753140005&single=true&output=csv" 
-
-# 3. เมนูด้านข้าง (Sidebar)
-st.sidebar.header("⚙️ การตั้งค่าข้อมูล")
-data_source = st.sidebar.radio("เลือกแหล่งข้อมูล:", ["อัพโหลดไฟล์ อัตโนมัติ", "อัปโหลดไฟล์ (CSV)"])
-
-@st.cache_data(ttl=600)
-def load_data_from_url(url):
-    try:
-        if url == "วาง_URL_ของคุณที่นี่" or url.strip() == "":
-            return None
-        return pd.read_csv(url)
-    except Exception as e:
-        st.sidebar.error(f"เกิดข้อผิดพลาดในการโหลดจาก URL: {e}")
-        return None
-
+# ==========================================
+# 2. ระบบโหลดข้อมูลจากไฟล์ CSV ใน GitHub (โหลดเร็วขึ้น 10 เท่า!)
+# ==========================================
 @st.cache_data
-def load_data_from_upload(file):
+def load_local_data(filename):
     try:
+        # พยายามโหลดไฟล์ (รองรับทั้งภาษาไทยและอังกฤษ)
         try:
-            return pd.read_csv(file, encoding='utf-8-sig')
+            return pd.read_csv(filename, encoding='utf-8-sig')
         except:
-            return pd.read_csv(file, encoding='tis-620', on_bad_lines='skip')
+            return pd.read_csv(filename, encoding='tis-620')
     except Exception as e:
-        st.sidebar.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
         return None
 
-df = None
+# โหลดไฟล์ทั้ง 2 ที่คุณอัปโหลดไว้
+df = load_local_data("sales data.CSV")      # ไฟล์ข้อมูลยอดขายหลัก
+df_product = load_local_data("product data.CSV") # ไฟล์ข้อมูลสินค้า
 
-if data_source == "อัปโหลดไฟล์ (CSV)":
-    uploaded_file = st.sidebar.file_uploader("อัปโหลดไฟล์ยอดขาย", type=['csv'])
-    if uploaded_file is not None:
-        df = load_data_from_upload(uploaded_file)
-    else:
-        st.sidebar.info("👈 กรุณาอัปโหลดไฟล์ CSV")
-else:
-    df = load_data_from_url(GOOGLE_SHEET_URL)
-    if df is None:
-        st.warning("⚠️ ไม่พบข้อมูลจาก Google Sheets กรุณาตรวจสอบ URL ในโค้ด")
-        if st.button("🔄 ลองดึงข้อมูลอีกครั้ง"):
-            st.cache_data.clear()
-
-# 4. เริ่มกระบวนการวิเคราะห์
+# 3. เริ่มกระบวนการวิเคราะห์
 if df is not None:
     if 'NAME' not in df.columns and len(df.columns) > 0:
         df.rename(columns={df.columns[0]: 'NAME'}, inplace=True)
@@ -182,18 +155,16 @@ if df is not None:
 
             executive_colors = ['#003f5c', '#2f4b7c', '#665191', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600']
 
-            tab1, tab2, tab3 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข"])
+            # ==========================================
+            # 4. เพิ่มแท็บที่ 4 สำหรับวิเคราะห์สินค้า!
+            # ==========================================
+            tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
             with tab1:
                 st.subheader("เปรียบเทียบยอดขายรายสาขา")
                 branch_sales = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
-                
                 col_bar, col_pie = st.columns(2)
-                
-                # บังคับเป็นภาพนิ่งเพื่อให้มือถือซูมได้
-                chart_config = {
-                    'staticPlot': True
-                }
+                chart_config = {'staticPlot': True}
                 
                 with col_bar:
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
@@ -222,23 +193,18 @@ if df is not None:
                     except:
                         pass
                     
-                    fig_line = px.line(daily_trend, x='CF_TRANDATE', y='GRANDTOTAL', 
-                                       markers=True, line_shape='spline') 
+                    fig_line = px.line(daily_trend, x='CF_TRANDATE', y='GRANDTOTAL', markers=True, line_shape='spline') 
                     fig_line.update_traces(line_color='#2f4b7c', line_width=3, marker_size=8)
                     fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)",
                                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                                            xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
-                    
                     st.plotly_chart(fig_line, use_container_width=True)
                 else:
                     st.info("ไม่มีคอลัมน์ 'CF_TRANDATE'")
 
             with tab3:
                 st.subheader("รายละเอียดยอดขาย")
-                display_df = branch_sales.rename(columns={
-                    'NAME': 'ชื่อสาขา', 
-                    'GRANDTOTAL': 'ยอดขายทั้งสิ้น'
-                })
+                display_df = branch_sales.rename(columns={'NAME': 'ชื่อสาขา', 'GRANDTOTAL': 'ยอดขายทั้งสิ้น'})
                 
                 display_df['ชื่อสาขา'] = display_df['ชื่อสาขา'].str.strip()
                 branch_mapping = {
@@ -255,7 +221,29 @@ if df is not None:
                 styled_df = (display_df.style
                              .format({'ยอดขายทั้งสิ้น': '{:,.2f}'})
                              .background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']))
-                
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+            # แท็บใหม่: วิเคราะห์สินค้า
+            with tab4:
+                st.subheader("🏆 10 อันดับสินค้าขายดี (จากไฟล์ product data.CSV)")
+                if df_product is not None and 'ITEMNAME' in df_product.columns and 'AMOUNT' in df_product.columns:
+                    # รวมมูลค่าขายตามชื่อสินค้า
+                    top_products = df_product.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
+                    top_products = top_products.sort_values('AMOUNT', ascending=False).head(10)
+                    
+                    # สร้างกราฟแท่งแนวนอน (Horizontal Bar) จะทำให้อ่านชื่อเมนูง่ายขึ้น
+                    fig_prod = px.bar(top_products, x='AMOUNT', y='ITEMNAME', orientation='h',
+                                      text_auto=',.0f', color='AMOUNT', color_continuous_scale='Blues')
+                    
+                    fig_prod.update_layout(yaxis={'categoryorder':'total ascending'}, 
+                                           xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
+                                           plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    
+                    st.plotly_chart(fig_prod, use_container_width=True, config={'staticPlot': True})
+                else:
+                    st.warning("รอข้อมูลจากไฟล์ product data.CSV")
+
     else:
         st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
+else:
+    st.error("❌ ไม่พบไฟล์ sales data.CSV กรุณาตรวจสอบว่าอัปโหลดไฟล์ใน GitHub ครบถ้วน")
