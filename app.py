@@ -7,7 +7,6 @@ import plotly.express as px
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 # ==========================================
-# ==========================================
 # 🎨 ส่วนตกแต่ง CSS สำหรับผู้บริหาร (Executive Theme)
 # ==========================================
 st.markdown("""
@@ -117,11 +116,35 @@ if df is not None:
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
-        chart_config = {
-                    'scrollZoom': True,       # อนุญาตให้ถ่างนิ้วซูมเฉพาะในกรอบของกราฟได้
-                    'displayModeBar': False   
-                }
+        # กรองช่วงวันที่ (ตั้งค่าเริ่มต้นเป็นของเมื่อวาน)
+        if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
+            min_date = df['Parsed_Date'].min().date()
+            max_date = df['Parsed_Date'].max().date()
             
+            st.sidebar.markdown("**📅 กรองตามช่วงวันที่**")
+            
+            today = datetime.date.today()
+            yesterday = today - datetime.timedelta(days=1)
+            
+            if yesterday > max_date:
+                default_date = max_date  
+            elif yesterday < min_date:
+                default_date = min_date
+            else:
+                default_date = yesterday
+                
+            date_range = st.sidebar.date_input(
+                "เลือกวันที่เริ่มต้น - สิ้นสุด:",
+                value=(default_date, default_date),
+                min_value=min_date,
+                max_value=max_date
+            )
+            
+            if len(date_range) == 2:
+                start_date, end_date = date_range
+                df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
+            
+            # กรองตามเดือน
             st.sidebar.markdown("**🗓️ กรองตามเดือน**")
             all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
             month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
@@ -136,6 +159,7 @@ if df is not None:
             if selected_months:
                 df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
         
+        # กรองสาขา
         st.sidebar.markdown("**🏢 กรองตามสาขา**")
         all_branches = df['NAME'].dropna().unique()
         selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
@@ -166,41 +190,26 @@ if df is not None:
                 
                 col_bar, col_pie = st.columns(2)
                 
-                # --- ตั้งค่าให้กราฟล็อกการเลื่อน (Pan) แต่ซูมได้ ---
+                # บังคับเป็นภาพนิ่งเพื่อให้มือถือซูมได้
                 chart_config = {
-                    'scrollZoom': True,       
-                    'displayModeBar': False   
-                }
-                # --- บังคับกราฟให้เป็นรูปภาพ (เพื่อให้มือถือใช้ระบบซูมหน้าเว็บตามปกติได้) ---
-                chart_config = {
-                    'staticPlot': True   
+                    'staticPlot': True
                 }
                 
                 with col_bar:
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
                                      color_discrete_sequence=executive_colors,
                                      text_auto=',.2f', title="ยอดขาย (กราฟแท่ง)")
-                    
-                    fig_bar.update_layout(
-                        showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)",
-                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                        yaxis=dict(showgrid=True, gridcolor='#f0f2f6'),
-                        dragmode=False  # <--- ล็อกไม่ให้กราฟเลื่อนหนีเวลาเอานิ้วไถหน้าจอ
-                    )
-                    # ใส่ config เข้าไปตอนโชว์กราฟ
+                    fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)",
+                                          plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                          yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
                     st.plotly_chart(fig_bar, use_container_width=True, config=chart_config)
                     
                 with col_pie:
                     fig_pie = px.pie(branch_sales, values='GRANDTOTAL', names='NAME', 
                                      color_discrete_sequence=executive_colors,
                                      title="สัดส่วนยอดขาย (กราฟโดนัท)", hole=0.45)
-                    
                     fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_pie.update_layout(
-                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                        dragmode=False  # <--- ล็อกไม่ให้กราฟเลื่อนหนี
-                    )
-                    # ใส่ config เข้าไปตอนโชว์กราฟ
+                    fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_pie, use_container_width=True, config=chart_config)
 
             with tab2:
@@ -231,7 +240,6 @@ if df is not None:
                     'GRANDTOTAL': 'ยอดขายทั้งสิ้น'
                 })
                 
-                # 1. ลบช่องว่างส่วนเกินและเปลี่ยนชื่อสาขาให้มีตัวเลขรหัสนำหน้า
                 display_df['ชื่อสาขา'] = display_df['ชื่อสาขา'].str.strip()
                 branch_mapping = {
                     'ตลาดเทศบาล': '1. ตลาดเทศบาล',
@@ -242,16 +250,12 @@ if df is not None:
                     'บ้านโป่ง': '6. บ้านโป่ง'
                 }
                 display_df['ชื่อสาขา'] = display_df['ชื่อสาขา'].replace(branch_mapping)
-                
-                # เรียงลำดับตารางตามชื่อสาขา (1 ถึง 6) 
                 display_df = display_df.sort_values('ชื่อสาขา')
                 
-                # 2. แรเงาสีเฉพาะช่อง "ยอดขายทั้งสิ้น" (วิธีนี้ปลอดภัยและไม่ Error)
                 styled_df = (display_df.style
                              .format({'ยอดขายทั้งสิ้น': '{:,.2f}'})
                              .background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']))
                 
-                # 3. hide_index=True จะช่วยซ่อนตัวเลข 0,1,2,3 ของระบบทิ้งไป
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
         st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
