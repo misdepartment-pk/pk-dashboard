@@ -175,8 +175,8 @@ if df is not None:
                 
                 # --- ตั้งค่าให้กราฟล็อกการเลื่อน (Pan) แต่ซูมได้ ---
                 chart_config = {
-                    'scrollZoom': True,       # อนุญาตให้ใช้นิ้วถ่างซูมเข้าออกได้
-                    'displayModeBar': False   # ซ่อนแถบเครื่องมือรกๆ ด้านบนกราฟ
+                    'scrollZoom': True,       
+                    'displayModeBar': False   
                 }
                 
                 with col_bar:
