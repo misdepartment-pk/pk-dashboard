@@ -117,21 +117,10 @@ if df is not None:
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
-        if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
-            min_date = df['Parsed_Date'].min().date()
-            max_date = df['Parsed_Date'].max().date()
-            
-            st.sidebar.markdown("**📅 กรองตามช่วงวันที่**")
-            date_range = st.sidebar.date_input(
-                "เลือกวันที่เริ่มต้น - สิ้นสุด:",
-                value=(min_date, max_date), 
-                min_value=min_date,
-                max_value=max_date
-            )
-            
-            if len(date_range) == 2:
-                start_date, end_date = date_range
-                df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
+        chart_config = {
+                    'scrollZoom': True,       # อนุญาตให้ถ่างนิ้วซูมเฉพาะในกรอบของกราฟได้
+                    'displayModeBar': False   
+                }
             
             st.sidebar.markdown("**🗓️ กรองตามเดือน**")
             all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
