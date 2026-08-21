@@ -185,9 +185,18 @@ if df is not None:
 
             with tab3:
                 st.subheader("รายละเอียดยอดขาย")
+                
+                # 1. จำลองข้อมูลขึ้นมาใหม่เพื่อเปลี่ยนชื่อคอลัมน์ (จะได้ไม่กระทบกับตัวแปรหลัก)
+                display_df = branch_sales.rename(columns={
+                    'NAME': 'ชื่อสาขา', 
+                    'GRANDTOTAL': 'ยอดขายทั้งสิ้น'
+                })
+                
+                # 2. นำข้อมูลที่เปลี่ยนชื่อแล้วมาแสดง พร้อมจัดรูปแบบตัวเลข (สังเกตว่าต้องเปลี่ยนชื่ออ้างอิงให้ตรงด้วย)
                 st.dataframe(
-                    branch_sales.style.format({'GRANDTOTAL': '{:,.2f}'}), 
+                    display_df.style.format({'ยอดขายทั้งสิ้น': '{:,.2f}'}), 
                     use_container_width=True
+                )
                 )
     else:
         st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
