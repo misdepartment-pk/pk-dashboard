@@ -1,16 +1,18 @@
 import streamlit as st
 import pandas as pd
 
-# 1. ตั้งค่าหน้าจอเว็บ
+# 1. ตั้งค่าหน้าจอเว็บ (layout="wide" จะแสดงผลเต็มจอคอม และจะเรียงซ้อนกันอัตโนมัติบนมือถือ)
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 st.title("🍜 PK Noodle Shop - Executive Dashboard")
-st.markdown("ระบบวิเคราะห์ยอดขายหลายมิติ (Multi-Dimensional Analysis)")
 
-# 2. นำ URL ที่คัดลอกมาจาก Google Sheets (Publish to web) มาวางที่นี่
+# ข้อความแนะนำสำหรับคนเปิดผ่านมือถือ (ช่วยแก้ปัญหาคนหาเมนูตัวกรองไม่เจอ)
+st.info("📱 **ทริคสำหรับมือถือ:** กดปุ่ม **> หรือ ☰** ที่มุมซ้ายบน เพื่อเปิดเมนูตัวกรองสาขาและอัปเดตข้อมูล")
+
+# 2. นำ URL ที่คัดลอกมาจาก Google Sheets มาวางที่นี่
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY7ex-fj9WSoY0H6PdP-POfww4cmK-FZRyLFVg1gB1vj-Y-Nme9Ag3wBg844Ml99vlSGI0DnCglAkZ/pub?gid=1767953677&single=true&output=csv" 
 
-# สร้างตัวเลือกให้ผู้ใช้เลือกว่าจะใช้ไฟล์อัปโหลดหรือดึงจาก Google Sheets
+# เมนูด้านข้าง (Sidebar)
 st.sidebar.header("⚙️ การตั้งค่าข้อมูล")
 data_source = st.sidebar.radio("เลือกแหล่งข้อมูล:", ["อัปโหลดไฟล์ (CSV)", "ดึงอัตโนมัติจาก Google Sheets"])
 
@@ -37,100 +39,81 @@ def load_data_from_upload(file):
 
 df = None
 
-# โหลดข้อมูลตามที่เลือก
 if data_source == "อัปโหลดไฟล์ (CSV)":
     uploaded_file = st.sidebar.file_uploader("อัปโหลดไฟล์ยอดขาย", type=['csv'])
     if uploaded_file is not None:
         df = load_data_from_upload(uploaded_file)
     else:
-        st.info("👈 กรุณาอัปโหลดไฟล์ CSV เพื่อเริ่มต้น")
+        st.sidebar.info("👈 กรุณาอัปโหลดไฟล์ CSV")
 else:
     df = load_data_from_url(GOOGLE_SHEET_URL)
     if df is None:
-        st.info("⚠️ ไม่พบข้อมูลจาก Google Sheets กรุณาตรวจสอบ URL ในโค้ด")
+        st.warning("⚠️ ไม่พบข้อมูลจาก Google Sheets กรุณาตรวจสอบ URL ในโค้ด")
         if st.button("🔄 ลองดึงข้อมูลอีกครั้ง"):
             st.cache_data.clear()
 
-# 3. เริ่มกระบวนการวิเคราะห์เมื่อมีข้อมูล
+# 3. เริ่มกระบวนการวิเคราะห์
 if df is not None:
-    # เคลียร์ชื่อคอลัมน์ (รองรับไฟล์ที่มีปัญหาคอลัมน์แรก)
     if 'NAME' not in df.columns and len(df.columns) > 0:
         df.rename(columns={df.columns[0]: 'NAME'}, inplace=True)
 
-    # กรองเฉพาะบิลที่ไม่ถูกยกเลิก
     if 'FCANCEL' in df.columns:
         df = df[df['FCANCEL'] == 0]
 
-    # ตรวจสอบว่ามีคอลัมน์สำคัญครบไหม
     required_cols = ['GRANDTOTAL', 'NAME']
     if all(col in df.columns for col in required_cols):
         
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
-        # ตัวกรองสาขา
         all_branches = df['NAME'].dropna().unique()
         selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
         
-        # ถ้าไม่ได้เลือกสาขาเลย ให้แสดงข้อความเตือน
         if not selected_branches:
             st.warning("⚠️ กรุณาเลือกสาขาอย่างน้อย 1 สาขา จากเมนูด้านซ้าย")
         else:
-            # กรอง DataFrame ตามสาขาที่เลือก
             df_filtered = df[df['NAME'].isin(selected_branches)]
 
-            # ---------------------------------------------------------
-            # ส่วนแสดงผลหลัก (KPIs)
-            # ---------------------------------------------------------
+            # KPIs (ในมือถือ ระบบจะจับเรียงซ้อนกันเป็นแนวตั้งให้อัตโนมัติ ทำให้ตัวเลขใหญ่และอ่านง่าย)
             total_sales = df_filtered['GRANDTOTAL'].sum()
             total_orders = len(df_filtered)
             
             col1, col2, col3 = st.columns(3)
-            col1.metric("ยอดขายรวม (เฉพาะที่เลือก)", f"฿{total_sales:,.2f}")
-            col2.metric("จำนวนรายการ (บิล)", f"{total_orders:,}")
+            col1.metric("ยอดขายรวม (ที่เลือก)", f"฿{total_sales:,.2f}")
+            col2.metric("จำนวนบิล", f"{total_orders:,}")
             if total_orders > 0:
-                col3.metric("ยอดเฉลี่ยต่อบิล", f"฿{(total_sales/total_orders):,.2f}")
+                col3.metric("เฉลี่ยต่อบิล", f"฿{(total_sales/total_orders):,.2f}")
             
             st.markdown("---")
 
-            # ---------------------------------------------------------
-            # ระบบแท็บ (Tabs) สำหรับมุมมองหลากหลายมิติ
-            # ---------------------------------------------------------
-            tab1, tab2, tab3 = st.tabs(["🏢 ภาพรวมรายสาขา", "📈 แนวโน้มรายวัน", "📋 ตารางข้อมูลเชิงลึก"])
+            # ปรับชื่อแท็บให้สั้นลง เพื่อให้พอดีกับหน้าจอมือถือ
+            tab1, tab2, tab3 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข"])
 
-            # มิติที่ 1: เปรียบเทียบสาขา
             with tab1:
-                st.subheader("ยอดขายเปรียบเทียบแต่ละสาขา")
+                st.subheader("เปรียบเทียบยอดขาย")
                 branch_sales = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
-                # ใช้ Native Chart สำหรับกราฟแท่ง
-                st.bar_chart(data=branch_sales.set_index('NAME'), y='GRANDTOTAL', color="#10B981", height=400)
+                # เอา height=400 ออก เพื่อให้กราฟปรับสัดส่วนอัตโนมัติตามมือถือ
+                st.bar_chart(data=branch_sales.set_index('NAME'), y='GRANDTOTAL', color="#10B981")
 
-            # มิติที่ 2: แนวโน้มตามวัน
             with tab2:
-                st.subheader("กราฟเส้นแสดงแนวโน้มยอดขายตามวัน")
+                st.subheader("แนวโน้มการขายรายวัน")
                 if 'CF_TRANDATE' in df_filtered.columns:
-                    # จัดกลุ่มรายวัน
                     daily_trend = df_filtered.groupby('CF_TRANDATE')['GRANDTOTAL'].sum().reset_index()
-                    
-                    # เรียงวันที่ให้ถูกต้อง 
                     try:
                         daily_trend['Day'] = daily_trend['CF_TRANDATE'].apply(lambda x: int(str(x).split('/')[0]))
                         daily_trend = daily_trend.sort_values('Day').drop('Day', axis=1)
                     except:
                         pass
-                        
-                    # ใช้ Native Chart สำหรับกราฟเส้น
-                    st.line_chart(data=daily_trend.set_index('CF_TRANDATE'), y='GRANDTOTAL', color="#2196F3", height=400)
+                    # เอา height=400 ออกเช่นกัน
+                    st.line_chart(data=daily_trend.set_index('CF_TRANDATE'), y='GRANDTOTAL', color="#2196F3")
                 else:
-                    st.info("ไฟล์ของคุณไม่มีคอลัมน์ 'CF_TRANDATE' จึงไม่สามารถสร้างกราฟรายวันได้")
+                    st.info("ไม่มีคอลัมน์ 'CF_TRANDATE'")
 
-            # มิติที่ 3: ตารางข้อมูล
             with tab3:
-                st.subheader("ตารางยอดขายรายสาขา (พร้อมจัดรูปแบบตัวเลข)")
+                st.subheader("รายละเอียด")
                 st.dataframe(
                     branch_sales.style.format({'GRANDTOTAL': '{:,.2f}'}), 
                     use_container_width=True
                 )
-                
     else:
-        st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น (ต้องการ 'NAME' และ 'GRANDTOTAL')")
+        st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
