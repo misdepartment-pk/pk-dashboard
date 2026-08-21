@@ -14,7 +14,12 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY7ex-fj9WS
 
 # เมนูด้านข้าง (Sidebar)
 st.sidebar.header("⚙️ การตั้งค่าข้อมูล")
-data_source = st.sidebar.radio("เลือกแหล่งข้อมูล:", ["อัปโหลดไฟล์ (CSV)", "ดึงอัตโนมัติจาก Google Sheets"])
+
+# สลับเอา "อัพโหลดไฟล์ อัตโนมัติ" ขึ้นก่อน และเปลี่ยนชื่อให้ตรงกับที่คุณต้องการ
+data_source = st.sidebar.radio(
+    "เลือกแหล่งข้อมูล:", 
+    ["อัพโหลดไฟล์ อัตโนมัติ", "อัปโหลดไฟล์ (CSV)"]
+)
 
 @st.cache_data(ttl=600)
 def load_data_from_url(url):
