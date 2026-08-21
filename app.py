@@ -178,6 +178,10 @@ if df is not None:
                     'scrollZoom': True,       
                     'displayModeBar': False   
                 }
+                # --- บังคับกราฟให้เป็นรูปภาพ (เพื่อให้มือถือใช้ระบบซูมหน้าเว็บตามปกติได้) ---
+                chart_config = {
+                    'staticPlot': True   
+                }
                 
                 with col_bar:
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
