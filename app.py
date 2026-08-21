@@ -157,9 +157,9 @@ if df is not None:
                 col_bar, col_pie = st.columns(2)
                 
                 with col_bar:
-                    # แก้ไขตรง text_auto จาก '.2s' เป็น ',.0f' 
+                    # เปลี่ยนจาก ',.0f' เป็น ',.2f' เพื่อเอาทศนิยม 2 ตำแหน่ง
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
-                                     text_auto=',.0f', title="ยอดขาย (กราฟแท่ง)")
+                                     text_auto=',.2f', title="ยอดขาย (กราฟแท่ง)")
                     
                     fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)")
                     st.plotly_chart(fig_bar, use_container_width=True)
