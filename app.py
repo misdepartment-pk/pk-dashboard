@@ -173,22 +173,38 @@ if df is not None:
                 
                 col_bar, col_pie = st.columns(2)
                 
+                # --- ตั้งค่าให้กราฟล็อกการเลื่อน (Pan) แต่ซูมได้ ---
+                chart_config = {
+                    'scrollZoom': True,       # อนุญาตให้ใช้นิ้วถ่างซูมเข้าออกได้
+                    'displayModeBar': False   # ซ่อนแถบเครื่องมือรกๆ ด้านบนกราฟ
+                }
+                
                 with col_bar:
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
                                      color_discrete_sequence=executive_colors,
                                      text_auto=',.2f', title="ยอดขาย (กราฟแท่ง)")
-                    fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)",
-                                          plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                                          yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
-                    st.plotly_chart(fig_bar, use_container_width=True)
+                    
+                    fig_bar.update_layout(
+                        showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)",
+                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                        yaxis=dict(showgrid=True, gridcolor='#f0f2f6'),
+                        dragmode=False  # <--- ล็อกไม่ให้กราฟเลื่อนหนีเวลาเอานิ้วไถหน้าจอ
+                    )
+                    # ใส่ config เข้าไปตอนโชว์กราฟ
+                    st.plotly_chart(fig_bar, use_container_width=True, config=chart_config)
                     
                 with col_pie:
                     fig_pie = px.pie(branch_sales, values='GRANDTOTAL', names='NAME', 
                                      color_discrete_sequence=executive_colors,
                                      title="สัดส่วนยอดขาย (กราฟโดนัท)", hole=0.45)
+                    
                     fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    fig_pie.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                        dragmode=False  # <--- ล็อกไม่ให้กราฟเลื่อนหนี
+                    )
+                    # ใส่ config เข้าไปตอนโชว์กราฟ
+                    st.plotly_chart(fig_pie, use_container_width=True, config=chart_config)
 
             with tab2:
                 st.subheader("แนวโน้มการขายรายวัน")
