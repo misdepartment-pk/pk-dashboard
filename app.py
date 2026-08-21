@@ -48,7 +48,7 @@ with col_title:
     st.info("📱 **ทริคสำหรับมือถือ:** กดปุ่ม **> หรือ ☰** ที่มุมซ้ายบน เพื่อเปิดเมนูตัวกรองข้อมูล")
 
 # 2. นำ URL ที่คัดลอกมาจาก Google Sheets มาวางที่นี่
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY7ex-fj9WSoY0H6PdP-POfww4cmK-FZRyLFVg1gB1vj-Y-Nme9Ag3wBg844Ml99vlSGI0DnCglAkZ/pub?gid=1767953677&single=true&output=csv" 
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-HkM63W8TKUlY5gGfnx1eVJIAIJDp5ErKeJ-yxkveLwpty0I45o8AVOZYp7-RqeWzDu4q572tqxNN/pub?gid=753140005&single=true&output=csv" 
 
 # 3. เมนูด้านข้าง (Sidebar)
 st.sidebar.header("⚙️ การตั้งค่าข้อมูล")
