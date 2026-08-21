@@ -1,25 +1,19 @@
 import streamlit as st
 import pandas as pd
+import datetime
 
-# 1. ตั้งค่าหน้าจอเว็บ (layout="wide" จะแสดงผลเต็มจอคอม และจะเรียงซ้อนกันอัตโนมัติบนมือถือ)
+# 1. ตั้งค่าหน้าจอเว็บ
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 st.title("🍜 PK Noodle Shop - Executive Dashboard")
-
-# ข้อความแนะนำสำหรับคนเปิดผ่านมือถือ (ช่วยแก้ปัญหาคนหาเมนูตัวกรองไม่เจอ)
-st.info("📱 **ทริคสำหรับมือถือ:** กดปุ่ม **> หรือ ☰** ที่มุมซ้ายบน เพื่อเปิดเมนูตัวกรองสาขาและอัปเดตข้อมูล")
+st.info("📱 **ทริคสำหรับมือถือ:** กดปุ่ม **> หรือ ☰** ที่มุมซ้ายบน เพื่อเปิดเมนูตัวกรองข้อมูล")
 
 # 2. นำ URL ที่คัดลอกมาจาก Google Sheets มาวางที่นี่
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY7ex-fj9WSoY0H6PdP-POfww4cmK-FZRyLFVg1gB1vj-Y-Nme9Ag3wBg844Ml99vlSGI0DnCglAkZ/pub?gid=1767953677&single=true&output=csv" 
 
-# เมนูด้านข้าง (Sidebar)
+# 3. เมนูด้านข้าง (Sidebar) - ตั้งค่าแหล่งข้อมูล
 st.sidebar.header("⚙️ การตั้งค่าข้อมูล")
-
-# สลับเอา "อัพโหลดไฟล์ อัตโนมัติ" ขึ้นก่อน และเปลี่ยนชื่อให้ตรงกับที่คุณต้องการ
-data_source = st.sidebar.radio(
-    "เลือกแหล่งข้อมูล:", 
-    ["อัพโหลดไฟล์ อัตโนมัติ", "อัปโหลดไฟล์ (CSV)"]
-)
+data_source = st.sidebar.radio("เลือกแหล่งข้อมูล:", ["อัพโหลดไฟล์ อัตโนมัติ", "อัปโหลดไฟล์ (CSV)"])
 
 @st.cache_data(ttl=600)
 def load_data_from_url(url):
@@ -44,6 +38,7 @@ def load_data_from_upload(file):
 
 df = None
 
+# โหลดข้อมูลตามเมนูที่เลือก
 if data_source == "อัปโหลดไฟล์ (CSV)":
     uploaded_file = st.sidebar.file_uploader("อัปโหลดไฟล์ยอดขาย", type=['csv'])
     if uploaded_file is not None:
@@ -57,7 +52,7 @@ else:
         if st.button("🔄 ลองดึงข้อมูลอีกครั้ง"):
             st.cache_data.clear()
 
-# 3. เริ่มกระบวนการวิเคราะห์
+# 4. เริ่มกระบวนการวิเคราะห์
 if df is not None:
     if 'NAME' not in df.columns and len(df.columns) > 0:
         df.rename(columns={df.columns[0]: 'NAME'}, inplace=True)
@@ -68,9 +63,57 @@ if df is not None:
     required_cols = ['GRANDTOTAL', 'NAME']
     if all(col in df.columns for col in required_cols):
         
+        # --- แปลงวันที่ (รองรับ พ.ศ.) เพื่อใช้ในระบบตัวกรอง ---
+        if 'CF_TRANDATE' in df.columns:
+            def parse_thai_date(date_str):
+                try:
+                    parts = str(date_str).split('/')
+                    d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+                    if y > 2500: y -= 543 # แปลง พ.ศ. เป็น ค.ศ.
+                    return pd.Timestamp(year=y, month=m, day=d)
+                except:
+                    return pd.NaT
+            
+            df['Parsed_Date'] = df['CF_TRANDATE'].apply(parse_thai_date)
+        
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
+        # ตัวกรองที่ 1: กรองช่วงวันที่ (จากวันที่ ... ถึงวันที่)
+        if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
+            min_date = df['Parsed_Date'].min().date()
+            max_date = df['Parsed_Date'].max().date()
+            
+            st.sidebar.markdown("**📅 กรองตามช่วงวันที่**")
+            date_range = st.sidebar.date_input(
+                "เลือกวันที่เริ่มต้น - สิ้นสุด:",
+                value=(min_date, max_date), # ค่า Default คือตั้งแต่วันแรกถึงวันสุดท้าย
+                min_value=min_date,
+                max_value=max_date
+            )
+            
+            # นำช่วงวันที่ที่เลือกไปกรองข้อมูล
+            if len(date_range) == 2:
+                start_date, end_date = date_range
+                df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
+            
+            # ตัวกรองที่ 2: กรองตามเดือน (Month)
+            st.sidebar.markdown("**🗓️ กรองตามเดือน**")
+            all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
+            month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
+            
+            selected_months = st.sidebar.multiselect(
+                "เลือกเดือนที่ต้องการดู:",
+                options=all_months,
+                default=all_months, # ค่า Default คือเลือกทุกเดือน
+                format_func=lambda x: month_names.get(x, str(x))
+            )
+            
+            if selected_months:
+                df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
+        
+        # ตัวกรองที่ 3: กรองสาขา
+        st.sidebar.markdown("**🏢 กรองตามสาขา**")
         all_branches = df['NAME'].dropna().unique()
         selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
         
@@ -79,7 +122,6 @@ if df is not None:
         else:
             df_filtered = df[df['NAME'].isin(selected_branches)]
 
-            # KPIs (ในมือถือ ระบบจะจับเรียงซ้อนกันเป็นแนวตั้งให้อัตโนมัติ ทำให้ตัวเลขใหญ่และอ่านง่าย)
             total_sales = df_filtered['GRANDTOTAL'].sum()
             total_orders = len(df_filtered)
             
@@ -91,13 +133,11 @@ if df is not None:
             
             st.markdown("---")
 
-            # ปรับชื่อแท็บให้สั้นลง เพื่อให้พอดีกับหน้าจอมือถือ
             tab1, tab2, tab3 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข"])
 
             with tab1:
                 st.subheader("เปรียบเทียบยอดขาย")
                 branch_sales = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
-                # เอา height=400 ออก เพื่อให้กราฟปรับสัดส่วนอัตโนมัติตามมือถือ
                 st.bar_chart(data=branch_sales.set_index('NAME'), y='GRANDTOTAL', color="#10B981")
 
             with tab2:
@@ -105,11 +145,11 @@ if df is not None:
                 if 'CF_TRANDATE' in df_filtered.columns:
                     daily_trend = df_filtered.groupby('CF_TRANDATE')['GRANDTOTAL'].sum().reset_index()
                     try:
+                        # พยายามเรียงวันที่ก่อนพล็อตกราฟเส้น
                         daily_trend['Day'] = daily_trend['CF_TRANDATE'].apply(lambda x: int(str(x).split('/')[0]))
                         daily_trend = daily_trend.sort_values('Day').drop('Day', axis=1)
                     except:
                         pass
-                    # เอา height=400 ออกเช่นกัน
                     st.line_chart(data=daily_trend.set_index('CF_TRANDATE'), y='GRANDTOTAL', color="#2196F3")
                 else:
                     st.info("ไม่มีคอลัมน์ 'CF_TRANDATE'")
