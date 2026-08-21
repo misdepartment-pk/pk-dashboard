@@ -225,7 +225,7 @@ if df is not None:
                 else:
                     st.info("ไม่มีคอลัมน์ 'CF_TRANDATE'")
 
-           with tab3:
+          with tab3:
                 st.subheader("รายละเอียดยอดขาย")
                 display_df = branch_sales.rename(columns={
                     'NAME': 'ชื่อสาขา', 
@@ -237,6 +237,6 @@ if df is not None:
                              .format({'ยอดขายทั้งสิ้น': '{:,.2f}'})
                              .background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']))
                 
-                st.dataframe(styled_df, use_container_width=True)
+                st.dataframe(styled_df, use_container_width=True) 
     else:
         st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
