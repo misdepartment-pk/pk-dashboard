@@ -63,9 +63,12 @@ if df is not None:
         # ใช้ Native Chart ของ Streamlit เพื่อรองรับภาษาไทย
         st.bar_chart(data=branch_sales, x='NAME', y='GRANDTOTAL', color="#10B981")
         
-        # แสดงตารางข้อมูลดิบ
+       # แสดงตารางข้อมูลดิบ
         st.subheader("📋 ตารางข้อมูลสรุป")
-        st.dataframe(branch_sales, use_container_width=True)
+        st.dataframe(
+            branch_sales.style.format({'GRANDTOTAL': '{:,.2f}'}), 
+            use_container_width=True
+        )
 
     else:
         st.error("ข้อมูลใน Google Sheets ไม่มีคอลัมน์ที่จำเป็น (ต้องการ 'NAME' และ 'GRANDTOTAL')")
