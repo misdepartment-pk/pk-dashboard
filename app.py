@@ -7,9 +7,13 @@ import plotly.express as px
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 # ==========================================
+# ==========================================
 # 🎨 ส่วนตกแต่ง CSS สำหรับผู้บริหาร (Executive Theme)
 # ==========================================
 st.markdown("""
+<!-- ปลดล็อกให้มือถือซูมเข้า-ออกได้ -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+
 <style>
     div[data-testid="metric-container"] {
         background-color: #ffffff;
