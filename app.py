@@ -1,21 +1,48 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import plotly.express as px  # <-- เพิ่มเครื่องมือวาดกราฟตัวใหม่
+import plotly.express as px
 
 # 1. ตั้งค่าหน้าจอเว็บ
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 # ==========================================
-# ส่วนหัวของเว็บ (แทรกโลโก้)
+# 🎨 ส่วนตกแต่ง CSS สำหรับผู้บริหาร (Executive Theme)
 # ==========================================
-col_logo, col_title = st.columns([1, 4]) # แบ่งสัดส่วนพื้นที่ โลโก้ 1 ส่วน : ชื่อเรื่อง 4 ส่วน
+st.markdown("""
+<style>
+    /* ตกแต่งกล่องตัวเลข KPI ให้มีกรอบและเงา (Card Style) */
+    div[data-testid="metric-container"] {
+        background-color: #ffffff;
+        border: 1px solid #f0f2f6;
+        padding: 5% 10%;
+        border-radius: 10px;
+        box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    /* ปรับสีตัวอักษรหัวข้อ KPI */
+    div[data-testid="metric-container"] > label {
+        color: #555555 !important;
+        font-size: 1.05rem !important;
+        font-weight: bold;
+    }
+    /* ปรับสีตัวเลข KPI ให้เป็นโทนสีกรมท่าที่ดูน่าเชื่อถือ */
+    div[data-testid="metric-container"] > div {
+        color: #003f5c !important; 
+    }
+    /* ซ่อนลายน้ำของ Streamlit ด้านล่าง */
+    footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# ส่วนหัวของเว็บ
+# ==========================================
+col_logo, col_title = st.columns([1, 4]) 
 with col_logo:
     try:
-        # ดึงรูป logo.png มาแสดง
         st.image("logo.png", width=150)
     except:
-        st.write("🍜") # ถ้าหารูปไม่เจอจะขึ้นอิโมจิแทน
+        st.write("🍜") 
         
 with col_title:
     st.title("PK Noodle Shop - Executive Dashboard")
@@ -24,7 +51,7 @@ with col_title:
 # 2. นำ URL ที่คัดลอกมาจาก Google Sheets มาวางที่นี่
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRY7ex-fj9WSoY0H6PdP-POfww4cmK-FZRyLFVg1gB1vj-Y-Nme9Ag3wBg844Ml99vlSGI0DnCglAkZ/pub?gid=1767953677&single=true&output=csv" 
 
-# 3. เมนูด้านข้าง (Sidebar) - ตั้งค่าแหล่งข้อมูล
+# 3. เมนูด้านข้าง (Sidebar)
 st.sidebar.header("⚙️ การตั้งค่าข้อมูล")
 data_source = st.sidebar.radio("เลือกแหล่งข้อมูล:", ["อัพโหลดไฟล์ อัตโนมัติ", "อัปโหลดไฟล์ (CSV)"])
 
@@ -51,7 +78,7 @@ def load_data_from_upload(file):
 
 df = None
 
-# โหลดข้อมูลตามเมนูที่เลือก
+# โหลดข้อมูล
 if data_source == "อัปโหลดไฟล์ (CSV)":
     uploaded_file = st.sidebar.file_uploader("อัปโหลดไฟล์ยอดขาย", type=['csv'])
     if uploaded_file is not None:
@@ -76,7 +103,7 @@ if df is not None:
     required_cols = ['GRANDTOTAL', 'NAME']
     if all(col in df.columns for col in required_cols):
         
-        # --- แปลงวันที่ (รองรับ พ.ศ.) ---
+        # --- แปลงวันที่ ---
         if 'CF_TRANDATE' in df.columns:
             def parse_thai_date(date_str):
                 try:
@@ -92,7 +119,7 @@ if df is not None:
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
-        # ตัวกรองที่ 1: ช่วงวันที่
+        # กรองวันที่
         if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
             min_date = df['Parsed_Date'].min().date()
             max_date = df['Parsed_Date'].max().date()
@@ -109,7 +136,7 @@ if df is not None:
                 start_date, end_date = date_range
                 df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
             
-            # ตัวกรองที่ 2: เดือน
+            # กรองเดือน
             st.sidebar.markdown("**🗓️ กรองตามเดือน**")
             all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
             month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
@@ -124,7 +151,7 @@ if df is not None:
             if selected_months:
                 df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
         
-        # ตัวกรองที่ 3: สาขา
+        # กรองสาขา
         st.sidebar.markdown("**🏢 กรองตามสาขา**")
         all_branches = df['NAME'].dropna().unique()
         selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
@@ -134,22 +161,23 @@ if df is not None:
         else:
             df_filtered = df[df['NAME'].isin(selected_branches)]
 
+            # 📊 ส่วนแสดง KPI
             total_sales = df_filtered['GRANDTOTAL'].sum()
             total_orders = len(df_filtered)
             
             col1, col2, col3 = st.columns(3)
-            col1.metric("ยอดขายรวม (ที่เลือก)", f"฿{total_sales:,.2f}")
-            col2.metric("จำนวนบิล", f"{total_orders:,}")
+            col1.metric("ยอดขายรวมทั้งหมด (บาท)", f"฿{total_sales:,.2f}")
+            col2.metric("จำนวนรายการ (บิล)", f"{total_orders:,}")
             if total_orders > 0:
-                col3.metric("เฉลี่ยต่อบิล", f"฿{(total_sales/total_orders):,.2f}")
+                col3.metric("ยอดเฉลี่ยต่อบิล (บาท)", f"฿{(total_sales/total_orders):,.2f}")
             
-            st.markdown("---")
+            st.markdown("<br>", unsafe_allow_html=True) # เว้นบรรทัดนิดนึงให้ดูโปร่งขึ้น
+
+            # โทนสีสำหรับผู้บริหาร (Executive Modern Palette)
+            executive_colors = ['#003f5c', '#2f4b7c', '#665191', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600']
 
             tab1, tab2, tab3 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข"])
 
-           # ==========================================
-            # มิติที่ 1: เปรียบเทียบสาขา (แท่งหลากสี + วงกลม)
-            # ==========================================
             with tab1:
                 st.subheader("เปรียบเทียบยอดขายรายสาขา")
                 branch_sales = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
@@ -157,17 +185,22 @@ if df is not None:
                 col_bar, col_pie = st.columns(2)
                 
                 with col_bar:
-                    # เปลี่ยนจาก ',.0f' เป็น ',.2f' เพื่อเอาทศนิยม 2 ตำแหน่ง
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
+                                     color_discrete_sequence=executive_colors,
                                      text_auto=',.2f', title="ยอดขาย (กราฟแท่ง)")
-                    
-                    fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)")
+                    # ทำให้กราฟดูสะอาดขึ้น ซ่อนเส้น Grid ที่ไม่จำเป็น
+                    fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)",
+                                          plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                          yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
                     st.plotly_chart(fig_bar, use_container_width=True)
                     
                 with col_pie:
-                    # สร้างกราฟโดนัท
                     fig_pie = px.pie(branch_sales, values='GRANDTOTAL', names='NAME', 
-                                     title="สัดส่วนยอดขาย (กราฟโดนัท)", hole=0.4)
+                                     color_discrete_sequence=executive_colors,
+                                     title="สัดส่วนยอดขาย (กราฟโดนัท)", hole=0.45)
+                    # ให้ข้อความชี้เปอร์เซ็นต์อยู่ด้านในวงกลม
+                    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                    fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_pie, use_container_width=True)
 
             with tab2:
@@ -179,24 +212,29 @@ if df is not None:
                         daily_trend = daily_trend.sort_values('Day').drop('Day', axis=1)
                     except:
                         pass
-                    st.line_chart(data=daily_trend.set_index('CF_TRANDATE'), y='GRANDTOTAL', color="#2196F3")
+                    
+                    # เปลี่ยนกราฟเส้นเป็น Plotly เพื่อให้โค้งสวยงามและหรูหราขึ้น
+                    fig_line = px.line(daily_trend, x='CF_TRANDATE', y='GRANDTOTAL', 
+                                       markers=True, line_shape='spline') # spline ทำให้เส้นโค้งมน
+                    fig_line.update_traces(line_color='#2f4b7c', line_width=3, marker_size=8)
+                    fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)",
+                                           plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                           xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
+                    
+                    st.plotly_chart(fig_line, use_container_width=True)
                 else:
                     st.info("ไม่มีคอลัมน์ 'CF_TRANDATE'")
 
             with tab3:
                 st.subheader("รายละเอียดยอดขาย")
-                
-                # 1. จำลองข้อมูลขึ้นมาใหม่เพื่อเปลี่ยนชื่อคอลัมน์ (จะได้ไม่กระทบกับตัวแปรหลัก)
                 display_df = branch_sales.rename(columns={
                     'NAME': 'ชื่อสาขา', 
                     'GRANDTOTAL': 'ยอดขายทั้งสิ้น'
                 })
                 
-                # 2. นำข้อมูลที่เปลี่ยนชื่อแล้วมาแสดง พร้อมจัดรูปแบบตัวเลข (สังเกตว่าต้องเปลี่ยนชื่ออ้างอิงให้ตรงด้วย)
                 st.dataframe(
                     display_df.style.format({'ยอดขายทั้งสิ้น': '{:,.2f}'}), 
                     use_container_width=True
                 )
-               
     else:
         st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
