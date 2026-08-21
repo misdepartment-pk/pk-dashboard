@@ -233,17 +233,12 @@ if df is not None:
                 # เรียงลำดับตารางตามชื่อสาขา (1 ถึง 6) 
                 display_df = display_df.sort_values('ชื่อสาขา')
                 
-                # 2. สร้างระบบสีให้แรเงาครอบคลุมทั้ง 2 ช่อง (ชื่อสาขา + ยอดขาย) ด้วยสีเดียวกัน
-                color_weights = pd.DataFrame({
-                    'ชื่อสาขา': display_df['ยอดขายทั้งสิ้น'], 
-                    'ยอดขายทั้งสิ้น': display_df['ยอดขายทั้งสิ้น']
-                })
-                
+                # 2. แรเงาสีเฉพาะช่อง "ยอดขายทั้งสิ้น" (วิธีนี้ปลอดภัยและไม่ Error)
                 styled_df = (display_df.style
                              .format({'ยอดขายทั้งสิ้น': '{:,.2f}'})
-                             .background_gradient(cmap='Blues', subset=['ชื่อสาขา', 'ยอดขายทั้งสิ้น'], gmap=color_weights))
+                             .background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']))
                 
-                # 3. hide_index=True คือคำสั่งซ่อนตัวเลข 0,1,2,3 ระบบที่อยู่ด้านซ้ายสุดทิ้งไป
+                # 3. hide_index=True จะช่วยซ่อนตัวเลข 0,1,2,3 ของระบบทิ้งไป
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
         st.error("ข้อมูลไม่มีคอลัมน์ที่จำเป็น ('NAME', 'GRANDTOTAL')")
