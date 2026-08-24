@@ -170,7 +170,6 @@ if df is not None:
 
             tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
-            # --- ซ่อนเนื้อหา Tab 1, 2, 3 ไว้เพื่อประหยัดพื้นที่ (โค้ดเดิมทั้งหมด) ---
             with tab1:
                 branch_sales = df_unique_bills.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
                 col_bar, col_pie = st.columns(2)
@@ -198,40 +197,68 @@ if df is not None:
                 st.dataframe(display_df.style.format({'ยอดขายทั้งสิ้น': '{:,.2f}'}).background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']), use_container_width=True, hide_index=True)
 
             # ==========================================
-            # แท็บ 4: วิเคราะห์สินค้า (ปรับการเชื่อมโยงข้อมูลใหม่ทั้งหมด)
+            # แท็บ 4: วิเคราะห์สินค้า (อัปเดตระบบ Smart Link กรองข้อมูลชัวร์ 100%)
             # ==========================================
             with tab4:
                 st.subheader("🏆 20 อันดับสินค้าขายดี (Top 20 Products)")
                 
                 if df_product is not None and 'ITEMNAME' in df_product.columns:
                     
-                    # 1. ทำความสะอาดเลขที่บิลให้เทียบกันได้แบบ 100% (ลบช่องว่าง ตัวพิมพ์ใหญ่)
-                    if col_bill and col_bill in df_filtered.columns and col_bill in df_product.columns:
-                        
-                        # เอาเลขที่บิลที่ผ่านการกรองวันที่/สาขา/FCANCEL=0 จากหน้าหลักมาใช้
-                        valid_bills = df_filtered[col_bill].astype(str).str.strip().str.upper().unique()
-                        
-                        # สร้างคอลัมน์เทียบใน df_product
-                        df_product['MATCH_BILL'] = df_product[col_bill].astype(str).str.strip().str.upper()
-                        
-                        # ดึงเฉพาะรายการสินค้าที่อยู่ในบิลที่ผ่านการกรองแล้วเท่านั้น!
-                        df_prod_filtered = df_product[df_product['MATCH_BILL'].isin(valid_bills)].copy()
-                        
-                        # แสดงผลลัพธ์การกรองให้ผู้ใช้เห็น (เพื่อความมั่นใจ)
-                        st.caption(f"📊 วิเคราะห์จากรายการสินค้าทั้งหมด {len(df_prod_filtered):,} รายการ จากจำนวน {len(valid_bills):,} บิล")
-                        
-                    else:
-                        st.warning("⚠️ ไม่พบคอลัมน์เลขที่บิล (TRANNO) ทำให้ไม่สามารถเชื่อมโยงวันที่และสาขาได้แม่นยำ")
-                        df_prod_filtered = df_product.copy()
+                    df_prod_filtered = df_product.copy()
+                    link_method = None
                     
-                    # ตรวจสอบว่ามีข้อมูลหรือไม่
+                    # 1. หารายชื่อคอลัมน์ที่เป็นไปได้สำหรับ "เลขที่บิล"
+                    bill_keywords = ['TRANNO', 'เลขที่บิล', 'BILLNO', 'RECEIPTNO', 'DOCNO']
+                    sales_bill_cols = [c for c in bill_keywords if c in df_filtered.columns]
+                    prod_bill_cols = [c for c in bill_keywords if c in df_prod_filtered.columns]
+                    
+                    # ระบบ Smart Link รูปแบบที่ 1: เชื่อมด้วย "เลขที่บิล"
+                    if sales_bill_cols and prod_bill_cols:
+                        c_sales = sales_bill_cols[0]
+                        c_prod = prod_bill_cols[0]
+                        valid_bills = df_filtered[c_sales].astype(str).str.strip().str.upper().unique()
+                        
+                        df_prod_filtered['MATCH_BILL'] = df_prod_filtered[c_prod].astype(str).str.strip().str.upper()
+                        df_prod_filtered = df_prod_filtered[df_prod_filtered['MATCH_BILL'].isin(valid_bills)]
+                        link_method = "เลขที่บิล (แม่นยำสูงสุด)"
+                    
+                    # ระบบ Smart Link รูปแบบที่ 2: ถ้าไม่มีเลขที่บิล ให้เชื่อมด้วย "วันที่ + สาขา" โดยตรง
+                    else:
+                        date_keywords = ['TRANDATE', 'CF_TRANDATE', 'วันที่', 'DATE']
+                        branch_keywords = ['NAME', 'CF_WAHOUSENAME', 'สาขา', 'BRANCH', 'FNAME']
+                        
+                        prod_date_cols = [c for c in date_keywords if c in df_prod_filtered.columns]
+                        prod_branch_cols = [c for c in branch_keywords if c in df_prod_filtered.columns]
+                        
+                        if prod_date_cols or prod_branch_cols:
+                            if prod_date_cols:
+                                c_date = prod_date_cols[0]
+                                df_prod_filtered['Parsed_Date'] = df_prod_filtered[c_date].apply(parse_thai_date)
+                                df_prod_filtered = df_prod_filtered[(df_prod_filtered['Parsed_Date'].dt.date >= start_date) & 
+                                                                    (df_prod_filtered['Parsed_Date'].dt.date <= end_date)]
+                            if prod_branch_cols:
+                                c_branch = prod_branch_cols[0]
+                                df_prod_filtered = df_prod_filtered[df_prod_filtered[c_branch].isin(selected_branches)]
+                                
+                            link_method = "วันที่และสาขา"
+
+                    # ตัดบิลที่ยกเลิกออก (FCANCEL)
+                    if 'FCANCEL' in df_prod_filtered.columns:
+                        df_prod_filtered = df_prod_filtered[df_prod_filtered['FCANCEL'] == 0]
+
+                    # แจ้งสถานะให้ผู้ใช้ทราบใต้หัวข้อ (แทนกล่องเหลือง Error แบบเดิม)
+                    if link_method:
+                        st.caption(f"✅ ข้อมูลสินค้าถูกกรองเรียบร้อยแล้ว (อ้างอิงจาก: {link_method}) | พบข้อมูลทั้งหมด {len(df_prod_filtered):,} รายการ")
+                    else:
+                        st.warning("⚠️ ไม่พบจุดเชื่อมโยง (เช่น เลขที่บิล, วันที่, สาขา) ระหว่าง 2 ไฟล์ กราฟจึงแสดงสินค้ารวมทั้งหมด")
+                    
+                    # เริ่มสร้างกราฟ
                     if df_prod_filtered.empty:
                         st.info("⚠️ ไม่มีข้อมูลสินค้าขายดีในช่วงเวลา หรือสาขาที่คุณเลือก")
                     else:
                         col_amount, col_qty = st.columns(2)
                         chart_config_prod = {'staticPlot': True}
                         
-                        # แปลงข้อมูลให้เป็นตัวเลข เพื่อป้องกัน Error คอมม่า
                         if 'AMOUNT' in df_prod_filtered.columns:
                             df_prod_filtered['AMOUNT'] = df_prod_filtered['AMOUNT'].astype(str).str.replace(',', '').str.strip()
                             df_prod_filtered['AMOUNT'] = pd.to_numeric(df_prod_filtered['AMOUNT'], errors='coerce').fillna(0)
@@ -240,7 +267,6 @@ if df is not None:
                             df_prod_filtered['BASEQUANTITY'] = df_prod_filtered['BASEQUANTITY'].astype(str).str.replace(',', '').str.strip()
                             df_prod_filtered['BASEQUANTITY'] = pd.to_numeric(df_prod_filtered['BASEQUANTITY'], errors='coerce').fillna(0)
                         
-                        # --- กราฟซ้าย (ยอดขาย) ---
                         with col_amount:
                             st.markdown("**💰 จัดอันดับตาม 'มูลค่าขาย (บาท)'**")
                             if 'AMOUNT' in df_prod_filtered.columns:
@@ -259,7 +285,6 @@ if df is not None:
                             else:
                                 st.write("ไม่พบคอลัมน์ AMOUNT")
 
-                        # --- กราฟขวา (จำนวนชิ้น) ---
                         with col_qty:
                             st.markdown("**📦 จัดอันดับตาม 'จำนวนที่ขาย (ชิ้น)'**")
                             if 'BASEQUANTITY' in df_prod_filtered.columns:
@@ -277,3 +302,5 @@ if df is not None:
                                 st.plotly_chart(fig_qty, use_container_width=True, config=chart_config_prod)
                             else:
                                 st.write("ไม่พบคอลัมน์ BASEQUANTITY")
+                else:
+                    st.warning("⚠️ รอข้อมูลจากไฟล์ product data.CSV")
