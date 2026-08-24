@@ -72,13 +72,11 @@ if df is not None:
     required_cols = ['GRANDTOTAL', 'NAME']
     if all(col in df.columns for col in required_cols):
         
-        # --- [แก้ไขที่ 1] ระบบแปลงวันที่ให้ฉลาดขึ้น รองรับกรณีมีเวลาติดมาด้วย ---
         col_date = 'TRANDATE' if 'TRANDATE' in df.columns else 'CF_TRANDATE'
         
         if col_date in df.columns:
             def parse_thai_date(date_str):
                 try:
-                    # ตัดเอาเฉพาะวันที่ (ตัดเวลาทิ้ง)
                     date_only = str(date_str).split()[0]
                     parts = date_only.split('/')
                     if len(parts) == 3:
@@ -150,11 +148,9 @@ if df is not None:
         else:
             df_filtered = df[df['NAME'].isin(selected_branches)].copy()
             
-            # ทำความสะอาดยอดเงิน GRANDTOTAL ให้เป็นตัวเลขชัวร์ๆ
             df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
             df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
-            # --- [แก้ไขที่ 2] ยุบบิลซ้ำก่อนคำนวณยอดขายรวม ---
             col_bill = 'TRANNO' if 'TRANNO' in df_filtered.columns else None
             if col_bill:
                 df_unique_bills = df_filtered.drop_duplicates(subset=[col_bill]).copy()
@@ -178,11 +174,10 @@ if df is not None:
 
             with tab1:
                 st.subheader("เปรียบเทียบยอดขายรายสาขา")
-                # คำนวณยอดขายจาก DataFrame ที่ไม่ซ้ำบิลแล้ว
                 branch_sales = df_unique_bills.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
                 
                 col_bar, col_pie = st.columns(2)
-                chart_config = {'staticPlot': False} # เปลี่ยนเป็น False ให้คลิกดูข้อมูลบนกราฟได้
+                chart_config = {'staticPlot': False}
                 
                 with col_bar:
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
@@ -204,7 +199,6 @@ if df is not None:
             with tab2:
                 st.subheader("แนวโน้มการขายรายวัน")
                 if 'Parsed_Date' in df_unique_bills.columns:
-                    # ใช้ Parsed_Date เพราะเป็น Date ที่สมบูรณ์แล้ว
                     daily_trend = df_unique_bills.groupby('Parsed_Date')['GRANDTOTAL'].sum().reset_index()
                     daily_trend = daily_trend.sort_values('Parsed_Date')
                     
@@ -238,50 +232,66 @@ if df is not None:
                              .background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']))
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
+            # ==========================================
+            # แท็บ 4: วิเคราะห์สินค้า สัมพันธ์กับตัวกรอง
+            # ==========================================
             with tab4:
                 st.subheader("🏆 20 อันดับสินค้าขายดี (Top 20 Products)")
                 
                 if df_product is not None and 'ITEMNAME' in df_product.columns and 'AMOUNT' in df_product.columns and 'BASEQUANTITY' in df_product.columns:
                     
-                    col_amount, col_qty = st.columns(2)
-                    chart_config_prod = {'staticPlot': True}
-                    
-                    # ทำความสะอาดข้อมูล AMOUNT เผื่อมีคอมม่า
-                    df_product['AMOUNT'] = df_product['AMOUNT'].astype(str).str.replace(',', '').str.strip()
-                    df_product['AMOUNT'] = pd.to_numeric(df_product['AMOUNT'], errors='coerce').fillna(0)
-                    
-                    with col_amount:
-                        st.markdown("**💰 จัดอันดับตาม 'มูลค่าขาย (บาท)'**")
-                        top_amount = df_product.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
-                        top_amount = top_amount.sort_values('AMOUNT', ascending=False).head(20)
+                    # --- [แก้ไขที่นี่] เชื่อมโยงสินค้าให้ตรงกับ "วันที่" และ "สาขา" ที่เลือก ---
+                    if 'TRANNO' in df_filtered.columns and 'TRANNO' in df_product.columns:
+                        # ดึงเฉพาะ 'เลขที่บิล' ที่ผ่านการกรองวันที่และสาขามาแล้ว
+                        valid_bills = df_filtered['TRANNO'].dropna().unique()
+                        # กรองข้อมูลสินค้าให้เหลือเฉพาะบิลเหล่านั้น
+                        df_prod_filtered = df_product[df_product['TRANNO'].isin(valid_bills)].copy()
+                    else:
+                        df_prod_filtered = df_product.copy() # สำรองกรณีไม่มีคอลัมน์ TRANNO
                         
-                        fig_amount = px.bar(top_amount, x='AMOUNT', y='ITEMNAME', orientation='h',
-                                          text_auto=',.2f', color='AMOUNT', color_continuous_scale='Blues')
+                    if df_prod_filtered.empty:
+                        st.info("ไม่มีข้อมูลสินค้าในช่วงเวลาหรือสาขาที่คุณเลือก")
+                    else:
+                        col_amount, col_qty = st.columns(2)
+                        chart_config_prod = {'staticPlot': True}
                         
-                        fig_amount.update_layout(
-                            yaxis={'categoryorder':'total ascending'}, 
-                            xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
-                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                            coloraxis_showscale=False, height=600 
-                        )
-                        st.plotly_chart(fig_amount, use_container_width=True, config=chart_config_prod)
+                        # ทำความสะอาดข้อมูล
+                        df_prod_filtered['AMOUNT'] = df_prod_filtered['AMOUNT'].astype(str).str.replace(',', '').str.strip()
+                        df_prod_filtered['AMOUNT'] = pd.to_numeric(df_prod_filtered['AMOUNT'], errors='coerce').fillna(0)
+                        
+                        df_prod_filtered['BASEQUANTITY'] = pd.to_numeric(df_prod_filtered['BASEQUANTITY'], errors='coerce').fillna(0)
+                        
+                        with col_amount:
+                            st.markdown("**💰 จัดอันดับตาม 'มูลค่าขาย (บาท)'**")
+                            top_amount = df_prod_filtered.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
+                            top_amount = top_amount.sort_values('AMOUNT', ascending=False).head(20)
+                            
+                            fig_amount = px.bar(top_amount, x='AMOUNT', y='ITEMNAME', orientation='h',
+                                              text_auto=',.2f', color='AMOUNT', color_continuous_scale='Blues')
+                            
+                            fig_amount.update_layout(
+                                yaxis={'categoryorder':'total ascending'}, 
+                                xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
+                                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                coloraxis_showscale=False, height=600 
+                            )
+                            st.plotly_chart(fig_amount, use_container_width=True, config=chart_config_prod)
 
-                    with col_qty:
-                        st.markdown("**📦 จัดอันดับตาม 'จำนวนที่ขาย (ชิ้น)'**")
-                        df_product['BASEQUANTITY'] = pd.to_numeric(df_product['BASEQUANTITY'], errors='coerce').fillna(0)
-                        top_qty = df_product.groupby('ITEMNAME')['BASEQUANTITY'].sum().reset_index()
-                        top_qty = top_qty.sort_values('BASEQUANTITY', ascending=False).head(20)
-                        
-                        fig_qty = px.bar(top_qty, x='BASEQUANTITY', y='ITEMNAME', orientation='h',
-                                          text_auto=',.0f', color='BASEQUANTITY', color_continuous_scale='Oranges')
-                        
-                        fig_qty.update_layout(
-                            yaxis={'categoryorder':'total ascending'}, 
-                            xaxis_title="จำนวนที่ขาย (ชิ้น)", yaxis_title="",
-                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                            coloraxis_showscale=False, height=600
-                        )
-                        st.plotly_chart(fig_qty, use_container_width=True, config=chart_config_prod)
+                        with col_qty:
+                            st.markdown("**📦 จัดอันดับตาม 'จำนวนที่ขาย (ชิ้น)'**")
+                            top_qty = df_prod_filtered.groupby('ITEMNAME')['BASEQUANTITY'].sum().reset_index()
+                            top_qty = top_qty.sort_values('BASEQUANTITY', ascending=False).head(20)
+                            
+                            fig_qty = px.bar(top_qty, x='BASEQUANTITY', y='ITEMNAME', orientation='h',
+                                              text_auto=',.0f', color='BASEQUANTITY', color_continuous_scale='Oranges')
+                            
+                            fig_qty.update_layout(
+                                yaxis={'categoryorder':'total ascending'}, 
+                                xaxis_title="จำนวนที่ขาย (ชิ้น)", yaxis_title="",
+                                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                coloraxis_showscale=False, height=600
+                            )
+                            st.plotly_chart(fig_qty, use_container_width=True, config=chart_config_prod)
                         
                 else:
                     st.warning("⚠️ รอข้อมูลจากไฟล์ product data.CSV หรือข้อมูลคอลัมน์ไม่ครบถ้วน")
