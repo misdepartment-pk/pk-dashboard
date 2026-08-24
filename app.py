@@ -46,12 +46,11 @@ with col_title:
     st.info("📱 **ทริคสำหรับมือถือ:** กดปุ่ม **> หรือ ☰** ที่มุมซ้ายบน เพื่อเปิดเมนูตัวกรองข้อมูล")
 
 # ==========================================
-# 2. ระบบโหลดข้อมูลจากไฟล์ CSV ใน GitHub (โหลดเร็วขึ้น 10 เท่า!)
+# 2. ระบบโหลดข้อมูลจากไฟล์ CSV
 # ==========================================
 @st.cache_data
 def load_local_data(filename):
     try:
-        # พยายามโหลดไฟล์ (รองรับทั้งภาษาไทยและอังกฤษ)
         try:
             return pd.read_csv(filename, encoding='utf-8-sig')
         except:
@@ -59,9 +58,8 @@ def load_local_data(filename):
     except Exception as e:
         return None
 
-# โหลดไฟล์ทั้ง 2 ที่คุณอัปโหลดไว้
-df = load_local_data("sales data.CSV")      # ไฟล์ข้อมูลยอดขายหลัก
-df_product = load_local_data("product data.CSV") # ไฟล์ข้อมูลสินค้า
+df = load_local_data("sales data.CSV")      
+df_product = load_local_data("product data.CSV") 
 
 # 3. เริ่มกระบวนการวิเคราะห์
 if df is not None:
@@ -74,22 +72,35 @@ if df is not None:
     required_cols = ['GRANDTOTAL', 'NAME']
     if all(col in df.columns for col in required_cols):
         
-        if 'CF_TRANDATE' in df.columns:
+        # --- [แก้ไขที่ 1] ระบบแปลงวันที่ให้ฉลาดขึ้น รองรับกรณีมีเวลาติดมาด้วย ---
+        col_date = 'TRANDATE' if 'TRANDATE' in df.columns else 'CF_TRANDATE'
+        
+        if col_date in df.columns:
             def parse_thai_date(date_str):
                 try:
-                    parts = str(date_str).split('/')
-                    d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
-                    if y > 2500: y -= 543 
-                    return pd.Timestamp(year=y, month=m, day=d)
+                    # ตัดเอาเฉพาะวันที่ (ตัดเวลาทิ้ง)
+                    date_only = str(date_str).split()[0]
+                    parts = date_only.split('/')
+                    if len(parts) == 3:
+                        d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+                        if y > 2500: y -= 543 
+                        return pd.Timestamp(year=y, month=m, day=d)
+                    elif '-' in date_only:
+                        parts = date_only.split('-')
+                        if len(parts) == 3:
+                            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+                            if y > 2500: y -= 543
+                            return pd.Timestamp(year=y, month=m, day=d)
                 except:
                     return pd.NaT
+                return pd.NaT
             
-            df['Parsed_Date'] = df['CF_TRANDATE'].apply(parse_thai_date)
+            df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
         
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
-        # กรองช่วงวันที่ (ตั้งค่าเริ่มต้นเป็นของเมื่อวาน)
+        # กรองช่วงวันที่
         if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
             min_date = df['Parsed_Date'].min().date()
             max_date = df['Parsed_Date'].max().date()
@@ -99,12 +110,9 @@ if df is not None:
             today = datetime.date.today()
             yesterday = today - datetime.timedelta(days=1)
             
-            if yesterday > max_date:
-                default_date = max_date  
-            elif yesterday < min_date:
-                default_date = min_date
-            else:
-                default_date = yesterday
+            if yesterday > max_date: default_date = max_date  
+            elif yesterday < min_date: default_date = min_date
+            else: default_date = yesterday
                 
             date_range = st.sidebar.date_input(
                 "เลือกวันที่เริ่มต้น - สิ้นสุด:",
@@ -140,10 +148,21 @@ if df is not None:
         if not selected_branches:
             st.warning("⚠️ กรุณาเลือกสาขาอย่างน้อย 1 สาขา จากเมนูด้านซ้าย")
         else:
-            df_filtered = df[df['NAME'].isin(selected_branches)]
+            df_filtered = df[df['NAME'].isin(selected_branches)].copy()
+            
+            # ทำความสะอาดยอดเงิน GRANDTOTAL ให้เป็นตัวเลขชัวร์ๆ
+            df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
+            df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
-            total_sales = df_filtered['GRANDTOTAL'].sum()
-            total_orders = len(df_filtered)
+            # --- [แก้ไขที่ 2] ยุบบิลซ้ำก่อนคำนวณยอดขายรวม ---
+            col_bill = 'TRANNO' if 'TRANNO' in df_filtered.columns else None
+            if col_bill:
+                df_unique_bills = df_filtered.drop_duplicates(subset=[col_bill]).copy()
+            else:
+                df_unique_bills = df_filtered.copy()
+
+            total_sales = df_unique_bills['GRANDTOTAL'].sum()
+            total_orders = len(df_unique_bills)
             
             col1, col2, col3 = st.columns(3)
             col1.metric("ยอดขายรวมทั้งหมด (บาท)", f"฿{total_sales:,.2f}")
@@ -155,16 +174,15 @@ if df is not None:
 
             executive_colors = ['#003f5c', '#2f4b7c', '#665191', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600']
 
-            # ==========================================
-            # 4. เพิ่มแท็บที่ 4 สำหรับวิเคราะห์สินค้า!
-            # ==========================================
             tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
             with tab1:
                 st.subheader("เปรียบเทียบยอดขายรายสาขา")
-                branch_sales = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
+                # คำนวณยอดขายจาก DataFrame ที่ไม่ซ้ำบิลแล้ว
+                branch_sales = df_unique_bills.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values('GRANDTOTAL', ascending=False)
+                
                 col_bar, col_pie = st.columns(2)
-                chart_config = {'staticPlot': True}
+                chart_config = {'staticPlot': False} # เปลี่ยนเป็น False ให้คลิกดูข้อมูลบนกราฟได้
                 
                 with col_bar:
                     fig_bar = px.bar(branch_sales, x='NAME', y='GRANDTOTAL', color='NAME', 
@@ -185,22 +203,19 @@ if df is not None:
 
             with tab2:
                 st.subheader("แนวโน้มการขายรายวัน")
-                if 'CF_TRANDATE' in df_filtered.columns:
-                    daily_trend = df_filtered.groupby('CF_TRANDATE')['GRANDTOTAL'].sum().reset_index()
-                    try:
-                        daily_trend['Day'] = daily_trend['CF_TRANDATE'].apply(lambda x: int(str(x).split('/')[0]))
-                        daily_trend = daily_trend.sort_values('Day').drop('Day', axis=1)
-                    except:
-                        pass
+                if 'Parsed_Date' in df_unique_bills.columns:
+                    # ใช้ Parsed_Date เพราะเป็น Date ที่สมบูรณ์แล้ว
+                    daily_trend = df_unique_bills.groupby('Parsed_Date')['GRANDTOTAL'].sum().reset_index()
+                    daily_trend = daily_trend.sort_values('Parsed_Date')
                     
-                    fig_line = px.line(daily_trend, x='CF_TRANDATE', y='GRANDTOTAL', markers=True, line_shape='spline') 
+                    fig_line = px.line(daily_trend, x='Parsed_Date', y='GRANDTOTAL', markers=True, line_shape='spline') 
                     fig_line.update_traces(line_color='#2f4b7c', line_width=3, marker_size=8)
                     fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)",
                                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                                            xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
                     st.plotly_chart(fig_line, use_container_width=True)
                 else:
-                    st.info("ไม่มีคอลัมน์ 'CF_TRANDATE'")
+                    st.info("ไม่มีข้อมูลวันที่สำหรับการสร้างเทรนด์")
 
             with tab3:
                 st.subheader("รายละเอียดยอดขาย")
@@ -223,50 +238,40 @@ if df is not None:
                              .background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']))
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-            # แท็บใหม่: วิเคราะห์สินค้า
-            # ==========================================
-            # แท็บ 4: วิเคราะห์สินค้า (20 อันดับ ยอดขาย vs จำนวน)
-            # ==========================================
             with tab4:
                 st.subheader("🏆 20 อันดับสินค้าขายดี (Top 20 Products)")
                 
                 if df_product is not None and 'ITEMNAME' in df_product.columns and 'AMOUNT' in df_product.columns and 'BASEQUANTITY' in df_product.columns:
                     
-                    # แบ่งหน้าจอเป็น 2 ฝั่ง
                     col_amount, col_qty = st.columns(2)
-                    chart_config = {'staticPlot': True}
+                    chart_config_prod = {'staticPlot': True}
                     
-                    # ------------------------------------
-                    # ฝั่งซ้าย: 20 อันดับตาม "มูลค่าขาย (บาท)"
-                    # ------------------------------------
+                    # ทำความสะอาดข้อมูล AMOUNT เผื่อมีคอมม่า
+                    df_product['AMOUNT'] = df_product['AMOUNT'].astype(str).str.replace(',', '').str.strip()
+                    df_product['AMOUNT'] = pd.to_numeric(df_product['AMOUNT'], errors='coerce').fillna(0)
+                    
                     with col_amount:
                         st.markdown("**💰 จัดอันดับตาม 'มูลค่าขาย (บาท)'**")
-                        # คำนวณรวมมูลค่า แล้วดึง 20 อันดับแรก
                         top_amount = df_product.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
                         top_amount = top_amount.sort_values('AMOUNT', ascending=False).head(20)
                         
-                        # สร้างกราฟแท่งแนวนอน (ใช้สีโทนฟ้า-น้ำเงิน)
                         fig_amount = px.bar(top_amount, x='AMOUNT', y='ITEMNAME', orientation='h',
                                           text_auto=',.2f', color='AMOUNT', color_continuous_scale='Blues')
                         
                         fig_amount.update_layout(
-                            yaxis={'categoryorder':'total ascending'}, # เรียงจากมากอยู่บน
+                            yaxis={'categoryorder':'total ascending'}, 
                             xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
                             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                            coloraxis_showscale=False, height=600 # ซ่อนแถบสีและปรับความสูงกราฟ
+                            coloraxis_showscale=False, height=600 
                         )
-                        st.plotly_chart(fig_amount, use_container_width=True, config=chart_config)
+                        st.plotly_chart(fig_amount, use_container_width=True, config=chart_config_prod)
 
-                    # ------------------------------------
-                    # ฝั่งขวา: 20 อันดับตาม "จำนวนที่ขาย (ชิ้น)"
-                    # ------------------------------------
                     with col_qty:
                         st.markdown("**📦 จัดอันดับตาม 'จำนวนที่ขาย (ชิ้น)'**")
-                        # คำนวณรวมจำนวนที่ขาย แล้วดึง 20 อันดับแรก
+                        df_product['BASEQUANTITY'] = pd.to_numeric(df_product['BASEQUANTITY'], errors='coerce').fillna(0)
                         top_qty = df_product.groupby('ITEMNAME')['BASEQUANTITY'].sum().reset_index()
                         top_qty = top_qty.sort_values('BASEQUANTITY', ascending=False).head(20)
                         
-                        # สร้างกราฟแท่งแนวนอน (ใช้สีโทนส้มแดง จะได้แยกความแตกต่างชัดเจน)
                         fig_qty = px.bar(top_qty, x='BASEQUANTITY', y='ITEMNAME', orientation='h',
                                           text_auto=',.0f', color='BASEQUANTITY', color_continuous_scale='Oranges')
                         
@@ -276,7 +281,7 @@ if df is not None:
                             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                             coloraxis_showscale=False, height=600
                         )
-                        st.plotly_chart(fig_qty, use_container_width=True, config=chart_config)
+                        st.plotly_chart(fig_qty, use_container_width=True, config=chart_config_prod)
                         
                 else:
                     st.warning("⚠️ รอข้อมูลจากไฟล์ product data.CSV หรือข้อมูลคอลัมน์ไม่ครบถ้วน")
