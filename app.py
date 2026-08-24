@@ -6,34 +6,28 @@ import plotly.express as px
 # 1. ตั้งค่าหน้าจอเว็บ
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
-# ==========================================
-# 🎨 ส่วนตกแต่ง CSS สำหรับผู้บริหาร (Executive Theme)
-# ==========================================
 st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style>
     div[data-testid="metric-container"] {
-        background-color: #ffffff;
-        border: 1px solid #f0f2f6;
+        background-color: #1e1e1e; /* ปรับสีพื้นหลังการ์ดให้เข้ากับโหมดมืดแบบในรูป */
+        border: 1px solid #333;
         padding: 5% 10%;
         border-radius: 10px;
-        box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.08);
+        box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.5);
     }
     div[data-testid="metric-container"] > label {
-        color: #555555 !important;
+        color: #cccccc !important;
         font-size: 1.05rem !important;
         font-weight: bold;
     }
     div[data-testid="metric-container"] > div {
-        color: #003f5c !important; 
+        color: #ffffff !important; 
     }
     footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# ส่วนหัวของเว็บ
-# ==========================================
 col_logo, col_title = st.columns([1, 4]) 
 with col_logo:
     try:
@@ -45,9 +39,6 @@ with col_title:
     st.title("PK Noodle Shop - Executive Dashboard")
     st.info("📱 **ทริคสำหรับมือถือ:** กดปุ่ม **> หรือ ☰** ที่มุมซ้ายบน เพื่อเปิดเมนูตัวกรองข้อมูล")
 
-# ==========================================
-# 2. ระบบโหลดข้อมูลจากไฟล์ CSV
-# ==========================================
 @st.cache_data
 def load_local_data(filename):
     try:
@@ -61,8 +52,27 @@ def load_local_data(filename):
 df = load_local_data("sales data.CSV")      
 df_product = load_local_data("product data.CSV") 
 
-# 3. เริ่มกระบวนการวิเคราะห์
+# ฟังก์ชันจัดการวันที่
+def parse_thai_date(date_str):
+    try:
+        date_only = str(date_str).split()[0]
+        parts = date_only.split('/')
+        if len(parts) == 3:
+            d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+            if y > 2500: y -= 543 
+            return pd.Timestamp(year=y, month=m, day=d)
+        elif '-' in date_only:
+            parts = date_only.split('-')
+            if len(parts) == 3:
+                y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+                if y > 2500: y -= 543
+                return pd.Timestamp(year=y, month=m, day=d)
+    except:
+        return pd.NaT
+    return pd.NaT
+
 if df is not None:
+    df.columns = df.columns.str.strip()
     if 'NAME' not in df.columns and len(df.columns) > 0:
         df.rename(columns={df.columns[0]: 'NAME'}, inplace=True)
 
@@ -75,30 +85,12 @@ if df is not None:
         col_date = 'TRANDATE' if 'TRANDATE' in df.columns else 'CF_TRANDATE'
         
         if col_date in df.columns:
-            def parse_thai_date(date_str):
-                try:
-                    date_only = str(date_str).split()[0]
-                    parts = date_only.split('/')
-                    if len(parts) == 3:
-                        d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
-                        if y > 2500: y -= 543 
-                        return pd.Timestamp(year=y, month=m, day=d)
-                    elif '-' in date_only:
-                        parts = date_only.split('-')
-                        if len(parts) == 3:
-                            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-                            if y > 2500: y -= 543
-                            return pd.Timestamp(year=y, month=m, day=d)
-                except:
-                    return pd.NaT
-                return pd.NaT
-            
             df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
         
         st.sidebar.markdown("---")
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
-        # กรองช่วงวันที่
+        # 1. กรองช่วงวันที่
         if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
             min_date = df['Parsed_Date'].min().date()
             max_date = df['Parsed_Date'].max().date()
@@ -122,8 +114,10 @@ if df is not None:
             if len(date_range) == 2:
                 start_date, end_date = date_range
                 df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
+            else:
+                start_date, end_date = min_date, max_date
             
-            # กรองตามเดือน
+            # 2. กรองตามเดือน
             st.sidebar.markdown("**🗓️ กรองตามเดือน**")
             all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
             month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
@@ -138,7 +132,7 @@ if df is not None:
             if selected_months:
                 df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
         
-        # กรองสาขา
+        # 3. กรองสาขา
         st.sidebar.markdown("**🏢 กรองตามสาขา**")
         all_branches = df['NAME'].dropna().unique()
         selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
@@ -169,6 +163,7 @@ if df is not None:
             st.markdown("<br>", unsafe_allow_html=True) 
 
             executive_colors = ['#003f5c', '#2f4b7c', '#665191', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600']
+            chart_bg = 'rgba(0,0,0,0)' # พื้นหลังโปร่งใส
 
             tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
@@ -184,8 +179,8 @@ if df is not None:
                                      color_discrete_sequence=executive_colors,
                                      text_auto=',.2f', title="ยอดขาย (กราฟแท่ง)")
                     fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)",
-                                          plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                                          yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
+                                          plot_bgcolor=chart_bg, paper_bgcolor=chart_bg,
+                                          yaxis=dict(showgrid=True, gridcolor='#444'))
                     st.plotly_chart(fig_bar, use_container_width=True, config=chart_config)
                     
                 with col_pie:
@@ -193,7 +188,7 @@ if df is not None:
                                      color_discrete_sequence=executive_colors,
                                      title="สัดส่วนยอดขาย (กราฟโดนัท)", hole=0.45)
                     fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                    fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    fig_pie.update_layout(plot_bgcolor=chart_bg, paper_bgcolor=chart_bg)
                     st.plotly_chart(fig_pie, use_container_width=True, config=chart_config)
 
             with tab2:
@@ -203,10 +198,10 @@ if df is not None:
                     daily_trend = daily_trend.sort_values('Parsed_Date')
                     
                     fig_line = px.line(daily_trend, x='Parsed_Date', y='GRANDTOTAL', markers=True, line_shape='spline') 
-                    fig_line.update_traces(line_color='#2f4b7c', line_width=3, marker_size=8)
+                    fig_line.update_traces(line_color='#ff7c43', line_width=3, marker_size=8)
                     fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)",
-                                           plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                                           xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#f0f2f6'))
+                                           plot_bgcolor=chart_bg, paper_bgcolor=chart_bg,
+                                           xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#444'))
                     st.plotly_chart(fig_line, use_container_width=True)
                 else:
                     st.info("ไม่มีข้อมูลวันที่สำหรับการสร้างเทรนด์")
@@ -214,17 +209,7 @@ if df is not None:
             with tab3:
                 st.subheader("รายละเอียดยอดขาย")
                 display_df = branch_sales.rename(columns={'NAME': 'ชื่อสาขา', 'GRANDTOTAL': 'ยอดขายทั้งสิ้น'})
-                
                 display_df['ชื่อสาขา'] = display_df['ชื่อสาขา'].str.strip()
-                branch_mapping = {
-                    'ตลาดเทศบาล': '1. ตลาดเทศบาล',
-                    'ตลาดศรีเมือง': '2. ตลาดศรีเมือง',
-                    'ทุ่งปอ': '3. ทุ่งปอ',
-                    'บ้านไร่': '4. บ้านไร่',
-                    'ตลาดเจ้าพรหม': '5. ตลาดเจ้าพรหม',
-                    'บ้านโป่ง': '6. บ้านโป่ง'
-                }
-                display_df['ชื่อสาขา'] = display_df['ชื่อสาขา'].replace(branch_mapping)
                 display_df = display_df.sort_values('ชื่อสาขา')
                 
                 styled_df = (display_df.style
@@ -233,65 +218,86 @@ if df is not None:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
             # ==========================================
-            # แท็บ 4: วิเคราะห์สินค้า สัมพันธ์กับตัวกรอง
+            # แท็บ 4: วิเคราะห์สินค้า
             # ==========================================
             with tab4:
                 st.subheader("🏆 20 อันดับสินค้าขายดี (Top 20 Products)")
                 
-                if df_product is not None and 'ITEMNAME' in df_product.columns and 'AMOUNT' in df_product.columns and 'BASEQUANTITY' in df_product.columns:
+                if df_product is not None and 'ITEMNAME' in df_product.columns:
+                    df_product.columns = df_product.columns.str.strip()
                     
-                    # --- [แก้ไขที่นี่] เชื่อมโยงสินค้าให้ตรงกับ "วันที่" และ "สาขา" ที่เลือก ---
-                    if 'TRANNO' in df_filtered.columns and 'TRANNO' in df_product.columns:
-                        # ดึงเฉพาะ 'เลขที่บิล' ที่ผ่านการกรองวันที่และสาขามาแล้ว
-                        valid_bills = df_filtered['TRANNO'].dropna().unique()
-                        # กรองข้อมูลสินค้าให้เหลือเฉพาะบิลเหล่านั้น
-                        df_prod_filtered = df_product[df_product['TRANNO'].isin(valid_bills)].copy()
+                    # --- แก้ปัญหาที่นี่: กรองข้อมูลในไฟล์ Product โดยตรงจากวันที่และสาขา ---
+                    # แปลงวันที่ใน df_product ให้เป็นรูปแบบเดียวกันก่อน
+                    col_date_prod = 'TRANDATE' if 'TRANDATE' in df_product.columns else 'CF_TRANDATE'
+                    if col_date_prod in df_product.columns:
+                        df_product['Parsed_Date'] = df_product[col_date_prod].apply(parse_thai_date)
+                        # กรองวันที่
+                        df_prod_filtered = df_product[(df_product['Parsed_Date'].dt.date >= start_date) & 
+                                                      (df_product['Parsed_Date'].dt.date <= end_date)]
                     else:
-                        df_prod_filtered = df_product.copy() # สำรองกรณีไม่มีคอลัมน์ TRANNO
-                        
+                        df_prod_filtered = df_product.copy()
+
+                    # กรองสาขา (ถ้ามีชื่อสาขาในไฟล์สินค้า)
+                    if 'NAME' in df_prod_filtered.columns:
+                        df_prod_filtered = df_prod_filtered[df_prod_filtered['NAME'].isin(selected_branches)]
+                    elif 'CF_WAHOUSENAME' in df_prod_filtered.columns:
+                        df_prod_filtered = df_prod_filtered[df_prod_filtered['CF_WAHOUSENAME'].isin(selected_branches)]
+                    
+                    # ตัดรายการที่ถูกยกเลิก (FCANCEL = 1) ออก
+                    if 'FCANCEL' in df_prod_filtered.columns:
+                        df_prod_filtered = df_prod_filtered[df_prod_filtered['FCANCEL'] == 0]
+
                     if df_prod_filtered.empty:
-                        st.info("ไม่มีข้อมูลสินค้าในช่วงเวลาหรือสาขาที่คุณเลือก")
+                        st.info("⚠️ ไม่มีข้อมูลสินค้าในช่วงเวลาหรือสาขาที่คุณเลือก")
                     else:
                         col_amount, col_qty = st.columns(2)
                         chart_config_prod = {'staticPlot': True}
                         
-                        # ทำความสะอาดข้อมูล
-                        df_prod_filtered['AMOUNT'] = df_prod_filtered['AMOUNT'].astype(str).str.replace(',', '').str.strip()
-                        df_prod_filtered['AMOUNT'] = pd.to_numeric(df_prod_filtered['AMOUNT'], errors='coerce').fillna(0)
+                        # ทำความสะอาดข้อมูล AMOUNT และ BASEQUANTITY
+                        if 'AMOUNT' in df_prod_filtered.columns:
+                            df_prod_filtered['AMOUNT'] = df_prod_filtered['AMOUNT'].astype(str).str.replace(',', '').str.strip()
+                            df_prod_filtered['AMOUNT'] = pd.to_numeric(df_prod_filtered['AMOUNT'], errors='coerce').fillna(0)
                         
-                        df_prod_filtered['BASEQUANTITY'] = pd.to_numeric(df_prod_filtered['BASEQUANTITY'], errors='coerce').fillna(0)
+                        if 'BASEQUANTITY' in df_prod_filtered.columns:
+                            df_prod_filtered['BASEQUANTITY'] = df_prod_filtered['BASEQUANTITY'].astype(str).str.replace(',', '').str.strip()
+                            df_prod_filtered['BASEQUANTITY'] = pd.to_numeric(df_prod_filtered['BASEQUANTITY'], errors='coerce').fillna(0)
                         
                         with col_amount:
                             st.markdown("**💰 จัดอันดับตาม 'มูลค่าขาย (บาท)'**")
-                            top_amount = df_prod_filtered.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
-                            top_amount = top_amount.sort_values('AMOUNT', ascending=False).head(20)
-                            
-                            fig_amount = px.bar(top_amount, x='AMOUNT', y='ITEMNAME', orientation='h',
-                                              text_auto=',.2f', color='AMOUNT', color_continuous_scale='Blues')
-                            
-                            fig_amount.update_layout(
-                                yaxis={'categoryorder':'total ascending'}, 
-                                xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
-                                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                                coloraxis_showscale=False, height=600 
-                            )
-                            st.plotly_chart(fig_amount, use_container_width=True, config=chart_config_prod)
+                            if 'AMOUNT' in df_prod_filtered.columns:
+                                top_amount = df_prod_filtered.groupby('ITEMNAME')['AMOUNT'].sum().reset_index()
+                                top_amount = top_amount.sort_values('AMOUNT', ascending=False).head(20)
+                                
+                                fig_amount = px.bar(top_amount, x='AMOUNT', y='ITEMNAME', orientation='h',
+                                                  text_auto=',.2f', color='AMOUNT', color_continuous_scale='Blues')
+                                
+                                fig_amount.update_layout(
+                                    yaxis={'categoryorder':'total ascending'}, 
+                                    xaxis_title="มูลค่าขาย (บาท)", yaxis_title="",
+                                    plot_bgcolor=chart_bg, paper_bgcolor=chart_bg,
+                                    coloraxis_showscale=False, height=600 
+                                )
+                                st.plotly_chart(fig_amount, use_container_width=True, config=chart_config_prod)
+                            else:
+                                st.write("ไม่พบคอลัมน์ AMOUNT")
 
                         with col_qty:
                             st.markdown("**📦 จัดอันดับตาม 'จำนวนที่ขาย (ชิ้น)'**")
-                            top_qty = df_prod_filtered.groupby('ITEMNAME')['BASEQUANTITY'].sum().reset_index()
-                            top_qty = top_qty.sort_values('BASEQUANTITY', ascending=False).head(20)
-                            
-                            fig_qty = px.bar(top_qty, x='BASEQUANTITY', y='ITEMNAME', orientation='h',
-                                              text_auto=',.0f', color='BASEQUANTITY', color_continuous_scale='Oranges')
-                            
-                            fig_qty.update_layout(
-                                yaxis={'categoryorder':'total ascending'}, 
-                                xaxis_title="จำนวนที่ขาย (ชิ้น)", yaxis_title="",
-                                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                                coloraxis_showscale=False, height=600
-                            )
-                            st.plotly_chart(fig_qty, use_container_width=True, config=chart_config_prod)
-                        
+                            if 'BASEQUANTITY' in df_prod_filtered.columns:
+                                top_qty = df_prod_filtered.groupby('ITEMNAME')['BASEQUANTITY'].sum().reset_index()
+                                top_qty = top_qty.sort_values('BASEQUANTITY', ascending=False).head(20)
+                                
+                                fig_qty = px.bar(top_qty, x='BASEQUANTITY', y='ITEMNAME', orientation='h',
+                                                  text_auto=',.0f', color='BASEQUANTITY', color_continuous_scale='Oranges')
+                                
+                                fig_qty.update_layout(
+                                    yaxis={'categoryorder':'total ascending'}, 
+                                    xaxis_title="จำนวนที่ขาย (ชิ้น)", yaxis_title="",
+                                    plot_bgcolor=chart_bg, paper_bgcolor=chart_bg,
+                                    coloraxis_showscale=False, height=600
+                                )
+                                st.plotly_chart(fig_qty, use_container_width=True, config=chart_config_prod)
+                            else:
+                                st.write("ไม่พบคอลัมน์ BASEQUANTITY")
                 else:
-                    st.warning("⚠️ รอข้อมูลจากไฟล์ product data.CSV หรือข้อมูลคอลัมน์ไม่ครบถ้วน")
+                    st.warning("⚠️ รอข้อมูลจากไฟล์ product data.CSV")
