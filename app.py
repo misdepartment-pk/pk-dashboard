@@ -49,7 +49,7 @@ def load_and_prep_data():
     df = read_csv_safe("sales data.CSV")
     df_prod = read_csv_safe("product data.CSV")
 
-    # ฟังก์ชันแปลงวันที่แบบกันตาย 100% (Robust Date Parser)
+    # ฟังก์ชันแปลงวันที่แบบกันตาย
     def parse_thai_date(date_str):
         if pd.isna(date_str): return pd.NaT
         try:
@@ -59,20 +59,18 @@ def load_and_prep_data():
             else: return pd.NaT
                 
             if len(parts) == 3:
-                # เช็คว่าส่วนแรกเป็นปี หรือเป็นวัน
                 if int(parts[0]) > 31: 
                     y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
                 else:
                     d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
                     
-                # แปลง พ.ศ. เป็น ค.ศ.
                 if y > 2500: y -= 543 
                 return pd.Timestamp(year=y, month=m, day=d)
         except: pass
         return pd.NaT
 
     # ---------------------------------------------
-    # จัดเตรียมไฟล์ Sales
+    # จัดเตรียมไฟล์ Sales data.CSV (ใช้อ้างอิงยอดขายรวม)
     # ---------------------------------------------
     if df is not None and not df.empty:
         df.columns = df.columns.str.strip()
@@ -80,7 +78,6 @@ def load_and_prep_data():
             df.rename(columns={df.columns[0]: 'NAME'}, inplace=True)
             
         if 'NAME' in df.columns: df['NAME'] = df['NAME'].astype(str).str.strip()
-        if 'TRANNO' in df.columns: df['TRANNO'] = df['TRANNO'].astype(str).str.strip().str.upper()
         if 'FCANCEL' in df.columns:
             df['FCANCEL'] = pd.to_numeric(df['FCANCEL'], errors='coerce').fillna(0)
             df = df[df['FCANCEL'] == 0] # เอาเฉพาะบิลที่ไม่ยกเลิก
@@ -89,12 +86,11 @@ def load_and_prep_data():
         if col_date: df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
 
     # ---------------------------------------------
-    # จัดเตรียมไฟล์ Product
+    # จัดเตรียมไฟล์ Product data.CSV (ใช้อ้างอิงสินค้าขายดี)
     # ---------------------------------------------
     if df_prod is not None and not df_prod.empty:
         df_prod.columns = df_prod.columns.str.strip()
         if 'NAME' in df_prod.columns: df_prod['NAME'] = df_prod['NAME'].astype(str).str.strip()
-        if 'TRANNO' in df_prod.columns: df_prod['TRANNO'] = df_prod['TRANNO'].astype(str).str.strip().str.upper()
         if 'FCANCEL' in df_prod.columns:
             df_prod['FCANCEL'] = pd.to_numeric(df_prod['FCANCEL'], errors='coerce').fillna(0)
             df_prod = df_prod[df_prod['FCANCEL'] == 0]
@@ -143,23 +139,17 @@ if df_master is not None and not df_master.empty:
     if not selected_branches:
         st.warning("⚠️ กรุณาเลือกสาขาอย่างน้อย 1 สาขา จากเมนูด้านซ้าย")
     else:
+        # ---------------------------------------------
+        # ✅ ดึงข้อมูลตรงๆ จาก sales data.CSV ไมมีตัดซ้ำ!
+        # ---------------------------------------------
         df_filtered = df[df['NAME'].isin(selected_branches)].copy()
         
         df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
         df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
-        # ---------------------------------------------
-        # ✅ แก้ไขบั๊กตัดบิลซ้ำ (ให้ดูจาก สาขา + เลขที่บิล)
-        # ---------------------------------------------
-        if 'TRANNO' in df_filtered.columns and 'NAME' in df_filtered.columns:
-            df_unique_bills = df_filtered.drop_duplicates(subset=['NAME', 'TRANNO']).copy()
-        elif 'TRANNO' in df_filtered.columns:
-            df_unique_bills = df_filtered.drop_duplicates(subset=['TRANNO']).copy()
-        else:
-            df_unique_bills = df_filtered.copy()
-
-        total_sales = df_unique_bills['GRANDTOTAL'].sum()
-        total_orders = len(df_unique_bills)
+        # ใช้ข้อมูลทั้งหมดที่เหลือจากการกรองวันที่และสาขา มาคำนวณยอดขายเลย
+        total_sales = df_filtered['GRANDTOTAL'].sum()
+        total_orders = len(df_filtered)
         
         col1, col2, col3 = st.columns(3)
         col1.metric("ยอดขายรวมทั้งหมด (บาท)", f"฿{total_sales:,.2f}")
@@ -173,8 +163,8 @@ if df_master is not None and not df_master.empty:
 
         tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
-        # บังคับให้แสดงชื่อสาขาที่เลือกมาทั้งหมด แม้ยอดจะเป็น 0
-        branch_sales = df_unique_bills.groupby('NAME')['GRANDTOTAL'].sum().reset_index()
+        # จัดเตรียมข้อมูลสำหรับกราฟ Tab 1 และ Tab 3 (แสดงทุกสาขาที่ถูกเลือก)
+        branch_sales = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index()
         all_selected_df = pd.DataFrame({'NAME': selected_branches})
         branch_sales = pd.merge(all_selected_df, branch_sales, on='NAME', how='left')
         branch_sales['GRANDTOTAL'] = branch_sales['GRANDTOTAL'].fillna(0)
@@ -197,8 +187,8 @@ if df_master is not None and not df_master.empty:
                     st.info("ไม่มีข้อมูลสัดส่วนยอดขาย")
 
         with tab2:
-            if 'Parsed_Date' in df_unique_bills.columns:
-                daily_trend = df_unique_bills.groupby('Parsed_Date')['GRANDTOTAL'].sum().reset_index().sort_values('Parsed_Date')
+            if 'Parsed_Date' in df_filtered.columns:
+                daily_trend = df_filtered.groupby('Parsed_Date')['GRANDTOTAL'].sum().reset_index().sort_values('Parsed_Date')
                 if not daily_trend.empty:
                     fig_line = px.line(daily_trend, x='Parsed_Date', y='GRANDTOTAL', markers=True, line_shape='spline') 
                     fig_line.update_traces(line_color='#2f4b7c', line_width=3, marker_size=8)
