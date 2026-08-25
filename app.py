@@ -49,44 +49,61 @@ def load_and_prep_data():
     df = read_csv_safe("sales data.CSV")
     df_prod = read_csv_safe("product data.CSV")
 
+    # 🚀 อัปเกรด: ตัวอ่านวันที่แบบครอบจักรวาล (แก้ปัญหาสาขาที่ตั้ง Format วันที่แปลกๆ)
     def parse_thai_date(date_str):
-        if pd.isna(date_str): return pd.NaT
+        if pd.isna(date_str) or str(date_str).strip() == '': return pd.NaT
         try:
             date_only = str(date_str).strip().split()[0]
-            if '/' in date_only: parts = date_only.split('/')
-            elif '-' in date_only: parts = date_only.split('-')
-            else: return pd.NaT
-                
+            parts = date_only.replace('-', '/').split('/')
             if len(parts) == 3:
-                if int(parts[0]) > 31: 
-                    y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+                p1, p2, p3 = int(parts[0]), int(parts[1]), int(parts[2])
+                
+                # หาว่าช่องไหนคือ 'ปี' แล้วสลับ วัน/เดือน ให้ถูกต้อง
+                if p1 > 1000:
+                    y, m, d = p1, p2, p3
+                elif p3 > 1000:
+                    y = p3
+                    if p2 > 12: d, m = p2, p1     # เจอเดือน/วัน/ปี
+                    elif p1 > 12: d, m = p1, p2   # เจอวัน/เดือน/ปี
+                    else: d, m = p1, p2           # ถ้าแยกไม่ออก ให้ยึด วัน/เดือน เป็นหลัก
                 else:
-                    d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
-                    
+                    y, m, d = p3, p2, p1 
+                
                 if y > 2500: y -= 543 
                 return pd.Timestamp(year=y, month=m, day=d)
         except: pass
-        return pd.NaT
+        
+        # ไม้ตายสุดท้าย ถ้าอ่านด้วยสูตรด้านบนไม่ได้ ให้ Pandas จัดการ
+        try: return pd.to_datetime(str(date_str).strip().split()[0], dayfirst=True, errors='coerce')
+        except: return pd.NaT
+
+    # 🚀 อัปเกรด: ฟังก์ชันล้างชื่อสาขา ลบช่องว่างและอักขระซ่อนรูปทุกชนิด
+    def clean_branch_name(name_series):
+        return name_series.astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.strip()
 
     if df is not None and not df.empty:
         df.columns = df.columns.str.strip()
         if 'NAME' not in df.columns and len(df.columns) > 0:
             df.rename(columns={df.columns[0]: 'NAME'}, inplace=True)
             
-        if 'NAME' in df.columns: df['NAME'] = df['NAME'].astype(str).str.strip()
+        if 'NAME' in df.columns: 
+            df['NAME'] = clean_branch_name(df['NAME'])
+            
         if 'FCANCEL' in df.columns:
-            df['FCANCEL'] = pd.to_numeric(df['FCANCEL'], errors='coerce').fillna(0)
-            df = df[df['FCANCEL'] == 0]
+            df['FCANCEL_CLEAN'] = pd.to_numeric(df['FCANCEL'], errors='coerce').fillna(0)
+            df = df[df['FCANCEL_CLEAN'] == 0]
             
         col_date = 'TRANDATE' if 'TRANDATE' in df.columns else ('CF_TRANDATE' if 'CF_TRANDATE' in df.columns else None)
         if col_date: df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
 
     if df_prod is not None and not df_prod.empty:
         df_prod.columns = df_prod.columns.str.strip()
-        if 'NAME' in df_prod.columns: df_prod['NAME'] = df_prod['NAME'].astype(str).str.strip()
+        if 'NAME' in df_prod.columns: 
+            df_prod['NAME'] = clean_branch_name(df_prod['NAME'])
+            
         if 'FCANCEL' in df_prod.columns:
-            df_prod['FCANCEL'] = pd.to_numeric(df_prod['FCANCEL'], errors='coerce').fillna(0)
-            df_prod = df_prod[df_prod['FCANCEL'] == 0]
+            df_prod['FCANCEL_CLEAN'] = pd.to_numeric(df_prod['FCANCEL'], errors='coerce').fillna(0)
+            df_prod = df_prod[df_prod['FCANCEL_CLEAN'] == 0]
             
         col_date_prod = 'TRANDATE' if 'TRANDATE' in df_prod.columns else ('CF_TRANDATE' if 'CF_TRANDATE' in df_prod.columns else None)
         if col_date_prod: df_prod['Parsed_Date'] = df_prod[col_date_prod].apply(parse_thai_date)
@@ -107,43 +124,28 @@ if df_master is not None and not df_master.empty:
         today = datetime.date.today()
         
         st.sidebar.markdown("**📅 1. เลือกเวลาที่ต้องการดู**")
+        date_mode = st.sidebar.selectbox("เลือกช่วงเวลาแบบด่วน:", ["ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"])
         
-        # --- เปลี่ยนระบบวันที่ให้เป็นแบบง่ายสุดๆ (เมนูดรอปดาวน์) ---
-        date_mode = st.sidebar.selectbox(
-            "เลือกช่วงเวลาแบบด่วน:",
-            ["ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"]
-        )
-        
-        if date_mode == "ดูข้อมูลทั้งหมด":
-            start_date, end_date = min_date, max_date
-        elif date_mode == "วันนี้":
-            start_date, end_date = today, today
-        elif date_mode == "เมื่อวาน":
+        if date_mode == "ดูข้อมูลทั้งหมด": start_date, end_date = min_date, max_date
+        elif date_mode == "วันนี้": start_date, end_date = today, today
+        elif date_mode == "เมื่อวาน": 
             yesterday = today - datetime.timedelta(days=1)
             start_date, end_date = yesterday, yesterday
-        elif date_mode == "7 วันล่าสุด":
-            start_date, end_date = today - datetime.timedelta(days=7), today
-        elif date_mode == "เดือนนี้":
-            start_date, end_date = today.replace(day=1), today
+        elif date_mode == "7 วันล่าสุด": start_date, end_date = today - datetime.timedelta(days=7), today
+        elif date_mode == "เดือนนี้": start_date, end_date = today.replace(day=1), today
         else:
-            # โหมดกำหนดเอง จะแยกเป็น 2 กล่องชัดเจน เข้าใจง่าย
             st.sidebar.markdown("👇 **เลือกวันที่เอง (ตั้งแต่ - จนถึง):**")
             col_sd, col_ed = st.sidebar.columns(2)
-            with col_sd:
-                start_date = st.date_input("ตั้งแต่", value=min_date)
-            with col_ed:
-                end_date = st.date_input("จนถึง", value=max_date)
+            with col_sd: start_date = st.date_input("ตั้งแต่", value=min_date)
+            with col_ed: end_date = st.date_input("จนถึง", value=max_date)
             
-        # นำวันที่มากรอง
         df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
         
-        # ซ่อนตัวกรองเดือนไว้ในปุ่มกด (เพื่อไม่ให้เมนูรก แต่ยังกดใช้ได้ถ้าต้องการ)
         with st.sidebar.expander("➕ กรองตามเดือน (สำหรับดูข้ามปี)"):
             all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
             month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
             selected_months = st.multiselect("เลือกเดือนที่ต้องการดู:", options=all_months, default=all_months, format_func=lambda x: month_names.get(x, str(x)))
-            if selected_months:
-                df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
+            if selected_months: df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
     
     st.sidebar.markdown("**🏢 2. เลือกสาขา**")
     all_branches = sorted(list(df_master['NAME'].dropna().unique()))
@@ -153,7 +155,6 @@ if df_master is not None and not df_master.empty:
         st.warning("⚠️ กรุณาเลือกสาขาอย่างน้อย 1 สาขา จากเมนูด้านซ้าย")
     else:
         df_filtered = df[df['NAME'].isin(selected_branches)].copy()
-        
         df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
         df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
@@ -209,14 +210,12 @@ if df_master is not None and not df_master.empty:
 
         with tab4:
             st.subheader("🏆 20 อันดับสินค้าขายดี (Top 20 Products)")
-            
             if df_product_master is not None and not df_product_master.empty:
                 df_prod_filtered = df_product_master.copy()
                 
                 if 'Parsed_Date' in df_prod_filtered.columns:
                     df_prod_filtered = df_prod_filtered[(df_prod_filtered['Parsed_Date'].dt.date >= start_date) & (df_prod_filtered['Parsed_Date'].dt.date <= end_date)]
-                    if selected_months:
-                        df_prod_filtered = df_prod_filtered[df_prod_filtered['Parsed_Date'].dt.month.isin(selected_months)]
+                    if selected_months: df_prod_filtered = df_prod_filtered[df_prod_filtered['Parsed_Date'].dt.month.isin(selected_months)]
                 
                 if 'NAME' in df_prod_filtered.columns:
                     df_prod_filtered = df_prod_filtered[df_prod_filtered['NAME'].isin(selected_branches)]
