@@ -4,6 +4,7 @@ import datetime
 import plotly.express as px
 import os
 
+# 1. ตั้งค่าหน้าจอเว็บ
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 st.markdown("""
@@ -36,9 +37,6 @@ with col_title:
     st.title("PK Noodle Shop - Executive Dashboard")
     st.info("📱 **ทริค:** เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)")
 
-# -------------------------------------------------------------
-# 🚀 ระบบโหลดข้อมูลที่เร็วขึ้น (โหลดครั้งเดียวจำไว้ใน Cache)
-# -------------------------------------------------------------
 @st.cache_data
 def load_and_prep_data():
     def read_csv_safe(file):
@@ -51,19 +49,31 @@ def load_and_prep_data():
     df = read_csv_safe("sales data.CSV")
     df_prod = read_csv_safe("product data.CSV")
 
+    # ฟังก์ชันแปลงวันที่แบบกันตาย 100% (Robust Date Parser)
     def parse_thai_date(date_str):
         if pd.isna(date_str): return pd.NaT
         try:
             date_only = str(date_str).strip().split()[0]
-            parts = date_only.replace('-', '/').split('/')
+            if '/' in date_only: parts = date_only.split('/')
+            elif '-' in date_only: parts = date_only.split('-')
+            else: return pd.NaT
+                
             if len(parts) == 3:
-                if int(parts[2]) > 2500: parts[2] = str(int(parts[2]) - 543)
-                elif int(parts[0]) > 2500: parts[0] = str(int(parts[0]) - 543)
-                return pd.to_datetime("/".join(parts), dayfirst=True, errors='coerce')
+                # เช็คว่าส่วนแรกเป็นปี หรือเป็นวัน
+                if int(parts[0]) > 31: 
+                    y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+                else:
+                    d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
+                    
+                # แปลง พ.ศ. เป็น ค.ศ.
+                if y > 2500: y -= 543 
+                return pd.Timestamp(year=y, month=m, day=d)
         except: pass
         return pd.NaT
 
-    # เตรียมไฟล์ Sales
+    # ---------------------------------------------
+    # จัดเตรียมไฟล์ Sales
+    # ---------------------------------------------
     if df is not None and not df.empty:
         df.columns = df.columns.str.strip()
         if 'NAME' not in df.columns and len(df.columns) > 0:
@@ -73,12 +83,14 @@ def load_and_prep_data():
         if 'TRANNO' in df.columns: df['TRANNO'] = df['TRANNO'].astype(str).str.strip().str.upper()
         if 'FCANCEL' in df.columns:
             df['FCANCEL'] = pd.to_numeric(df['FCANCEL'], errors='coerce').fillna(0)
-            df = df[df['FCANCEL'] == 0]
+            df = df[df['FCANCEL'] == 0] # เอาเฉพาะบิลที่ไม่ยกเลิก
             
         col_date = 'TRANDATE' if 'TRANDATE' in df.columns else ('CF_TRANDATE' if 'CF_TRANDATE' in df.columns else None)
         if col_date: df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
 
-    # เตรียมไฟล์ Product
+    # ---------------------------------------------
+    # จัดเตรียมไฟล์ Product
+    # ---------------------------------------------
     if df_prod is not None and not df_prod.empty:
         df_prod.columns = df_prod.columns.str.strip()
         if 'NAME' in df_prod.columns: df_prod['NAME'] = df_prod['NAME'].astype(str).str.strip()
@@ -92,7 +104,7 @@ def load_and_prep_data():
 
     return df, df_prod
 
-# โหลดข้อมูล
+# โหลดข้อมูลมาใช้งาน
 df_master, df_product_master = load_and_prep_data()
 
 # -------------------------------------------------------------
@@ -125,7 +137,7 @@ if df_master is not None and not df_master.empty:
             df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
     
     st.sidebar.markdown("**🏢 กรองตามสาขา**")
-    all_branches = sorted(list(df_master['NAME'].dropna().unique())) # ดึงชื่อสาขาจากไฟล์หลัก ป้องกันสาขาหาย
+    all_branches = sorted(list(df_master['NAME'].dropna().unique()))
     selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
     
     if not selected_branches:
@@ -136,8 +148,12 @@ if df_master is not None and not df_master.empty:
         df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
         df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
-        # ยุบบิลซ้ำเพื่อความแม่นยำ
-        if 'TRANNO' in df_filtered.columns:
+        # ---------------------------------------------
+        # ✅ แก้ไขบั๊กตัดบิลซ้ำ (ให้ดูจาก สาขา + เลขที่บิล)
+        # ---------------------------------------------
+        if 'TRANNO' in df_filtered.columns and 'NAME' in df_filtered.columns:
+            df_unique_bills = df_filtered.drop_duplicates(subset=['NAME', 'TRANNO']).copy()
+        elif 'TRANNO' in df_filtered.columns:
             df_unique_bills = df_filtered.drop_duplicates(subset=['TRANNO']).copy()
         else:
             df_unique_bills = df_filtered.copy()
@@ -157,7 +173,7 @@ if df_master is not None and not df_master.empty:
 
         tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
-        # บังคับให้แสดงชื่อสาขาที่เลือกมาทั้งหมด (แม้ยอดจะเป็น 0)
+        # บังคับให้แสดงชื่อสาขาที่เลือกมาทั้งหมด แม้ยอดจะเป็น 0
         branch_sales = df_unique_bills.groupby('NAME')['GRANDTOTAL'].sum().reset_index()
         all_selected_df = pd.DataFrame({'NAME': selected_branches})
         branch_sales = pd.merge(all_selected_df, branch_sales, on='NAME', how='left')
