@@ -7,9 +7,6 @@ import os
 # 1. ตั้งค่าหน้าจอเว็บ
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
-# ==========================================
-# 🎨 ปรับแต่ง CSS (เพิ่มโค้ดซ่อนปุ่มมุมขวาบนแล้ว)
-# ==========================================
 st.markdown("""
 <style>
     div[data-testid="metric-container"] {
@@ -27,17 +24,9 @@ st.markdown("""
     div[data-testid="metric-container"] > div {
         color: #003f5c !important; 
     }
-    
-    /* ซ่อน Footer เริ่มต้นของ Streamlit */
     footer {visibility: hidden;}
     
-    /* 🚫 ซ่อนแถบเครื่องมือมุมขวาบน (Share, Star, Edit, GitHub) และ 3 จุด */
-    .viewerBadge_container { display: none !important; }
-    .viewerBadge_link { display: none !important; }
-    [data-testid="stToolbar"] { display: none !important; }
-    #MainMenu { display: none !important; }
-    
-    /* ดันข้อความเครดิตให้อยู่ล่างสุดของ Sidebar */
+    /* ดันข้อความให้อยู่ล่างสุดของ Sidebar */
     .sidebar-footer {
         position: relative;
         bottom: 0;
