@@ -25,6 +25,17 @@ st.markdown("""
         color: #003f5c !important; 
     }
     footer {visibility: hidden;}
+    
+    /* ดันข้อความให้อยู่ล่างสุดของ Sidebar */
+    .sidebar-footer {
+        position: relative;
+        bottom: 0;
+        width: 100%;
+        padding-top: 50px;
+        text-align: left;
+        font-size: 0.85rem;
+        color: #888888;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -49,7 +60,6 @@ def load_and_prep_data():
     df = read_csv_safe("sales data.CSV")
     df_prod = read_csv_safe("product data.CSV")
 
-    # 🚀 อัปเกรด: ตัวอ่านวันที่แบบครอบจักรวาล (แก้ปัญหาสาขาที่ตั้ง Format วันที่แปลกๆ)
     def parse_thai_date(date_str):
         if pd.isna(date_str) or str(date_str).strip() == '': return pd.NaT
         try:
@@ -58,26 +68,21 @@ def load_and_prep_data():
             if len(parts) == 3:
                 p1, p2, p3 = int(parts[0]), int(parts[1]), int(parts[2])
                 
-                # หาว่าช่องไหนคือ 'ปี' แล้วสลับ วัน/เดือน ให้ถูกต้อง
-                if p1 > 1000:
-                    y, m, d = p1, p2, p3
+                if p1 > 1000: y, m, d = p1, p2, p3
                 elif p3 > 1000:
                     y = p3
-                    if p2 > 12: d, m = p2, p1     # เจอเดือน/วัน/ปี
-                    elif p1 > 12: d, m = p1, p2   # เจอวัน/เดือน/ปี
-                    else: d, m = p1, p2           # ถ้าแยกไม่ออก ให้ยึด วัน/เดือน เป็นหลัก
-                else:
-                    y, m, d = p3, p2, p1 
+                    if p2 > 12: d, m = p2, p1     
+                    elif p1 > 12: d, m = p1, p2   
+                    else: d, m = p1, p2           
+                else: y, m, d = p3, p2, p1 
                 
                 if y > 2500: y -= 543 
                 return pd.Timestamp(year=y, month=m, day=d)
         except: pass
         
-        # ไม้ตายสุดท้าย ถ้าอ่านด้วยสูตรด้านบนไม่ได้ ให้ Pandas จัดการ
         try: return pd.to_datetime(str(date_str).strip().split()[0], dayfirst=True, errors='coerce')
         except: return pd.NaT
 
-    # 🚀 อัปเกรด: ฟังก์ชันล้างชื่อสาขา ลบช่องว่างและอักขระซ่อนรูปทุกชนิด
     def clean_branch_name(name_series):
         return name_series.astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.strip()
 
@@ -150,6 +155,11 @@ if df_master is not None and not df_master.empty:
     st.sidebar.markdown("**🏢 2. เลือกสาขา**")
     all_branches = sorted(list(df_master['NAME'].dropna().unique()))
     selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", all_branches, default=all_branches)
+    
+    # ==========================================
+    # เครดิตเวอร์ชันมุมซ้ายล่าง
+    # ==========================================
+    st.sidebar.markdown("<div class='sidebar-footer'>Power by peter pak: v.10.0.0</div>", unsafe_allow_html=True)
     
     if not selected_branches:
         st.warning("⚠️ กรุณาเลือกสาขาอย่างน้อย 1 สาขา จากเมนูด้านซ้าย")
