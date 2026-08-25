@@ -37,27 +37,28 @@ with col_title:
     st.title("PK Noodle Shop - Executive Dashboard")
     st.info("📱 **ทริค:** เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)")
 
-@st.cache_data
+# ปิดระบบ Cache ชั่วคราว เพื่อให้อ่านไฟล์ใหม่สดๆ ทุกครั้งที่ทดสอบระบบ
 def load_local_data(filename):
     try:
         try: return pd.read_csv(filename, encoding='utf-8-sig', low_memory=False)
         except: return pd.read_csv(filename, encoding='tis-620', low_memory=False)
     except: return None
 
+# อัปเกรดฟังก์ชันวันที่ให้รองรับทุก Format
 def parse_thai_date(date_str):
     if pd.isna(date_str): return pd.NaT
     try:
         date_only = str(date_str).strip().split()[0]
-        if '/' in date_only: parts = date_only.split('/')
-        elif '-' in date_only: parts = date_only.split('-')
-        else: return pd.NaT
-            
+        parts = date_only.replace('-', '/').split('/')
         if len(parts) == 3:
-            y, m, d = (int(parts[2]), int(parts[1]), int(parts[0])) if int(parts[0]) <= 31 else (int(parts[0]), int(parts[1]), int(parts[2]))
-            if y > 2500: y -= 543 
-            return pd.Timestamp(year=y, month=m, day=d)
-    except: pass
-    return pd.NaT
+            # ปรับแก้ พ.ศ. เป็น ค.ศ. อัตโนมัติ
+            if int(parts[2]) > 2500: parts[2] = str(int(parts[2]) - 543)
+            elif int(parts[0]) > 2500: parts[0] = str(int(parts[0]) - 543)
+            date_only = "/".join(parts)
+            
+        return pd.to_datetime(date_only, dayfirst=True, errors='coerce')
+    except:
+        return pd.NaT
 
 df = load_local_data("sales data.CSV")      
 df_product = load_local_data("product data.CSV") 
@@ -73,7 +74,6 @@ if df is not None:
     if 'NAME' not in df.columns and len(df.columns) > 0:
         df.rename(columns={df.columns[0]: 'NAME'}, inplace=True)
 
-    # คลีนสถานะยกเลิกให้เป็นตัวเลขและกรองบิลยกเลิกออก
     if 'FCANCEL' in df.columns:
         df['FCANCEL'] = pd.to_numeric(df['FCANCEL'], errors='coerce').fillna(0)
         df = df[df['FCANCEL'] == 0]
@@ -91,11 +91,11 @@ if df is not None:
         st.sidebar.subheader("🔍 ตัวกรองข้อมูล (Filters)")
         
         if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
-            min_date = df['Parsed_Date'].min().date()
-            max_date = df['Parsed_Date'].max().date()
+            min_date = df['Parsed_Date'].dropna().min().date()
+            max_date = df['Parsed_Date'].dropna().max().date()
             
             st.sidebar.markdown("**📅 กรองตามช่วงวันที่**")
-            # --- แก้ไขให้เปิดมาแสดง "ข้อมูลทั้งหมด" ทันที ไม่ซ่อนยอด ---
+            # เริ่มต้นให้โชว์ทุกวัน
             date_range = st.sidebar.date_input("เลือกวันที่เริ่มต้น - สิ้นสุด:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
             
             if len(date_range) == 2:
@@ -120,7 +120,6 @@ if df is not None:
                     df_product = df_product[df_product['Parsed_Date'].dt.month.isin(selected_months)]
         
         st.sidebar.markdown("**🏢 กรองตามสาขา**")
-        # ดึงรายชื่อสาขาทั้งหมดที่มีในระบบ (เพื่อให้ตารางแสดงครบแม้ไม่มีบิล)
         all_branches = list(df['NAME'].dropna().unique())
         selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
         
@@ -141,7 +140,7 @@ if df is not None:
             df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
             df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
-            # คลีนเลขที่บิลก่อน drop_duplicates เพื่อความแม่นยำ
+            # คลีนเลขที่บิลและจัดกลุ่มยอดบิล
             col_bill = 'TRANNO' if 'TRANNO' in df_filtered.columns else None
             if col_bill:
                 df_filtered[col_bill] = df_filtered[col_bill].astype(str).str.strip().str.upper()
@@ -155,8 +154,7 @@ if df is not None:
             col1, col2, col3 = st.columns(3)
             col1.metric("ยอดขายรวมทั้งหมด (บาท)", f"฿{total_sales:,.2f}")
             col2.metric("จำนวนรายการ (บิล)", f"{total_orders:,}")
-            if total_orders > 0:
-                col3.metric("ยอดเฉลี่ยต่อบิล (บาท)", f"฿{(total_sales/total_orders):,.2f}")
+            if total_orders > 0: col3.metric("ยอดเฉลี่ยต่อบิล (บาท)", f"฿{(total_sales/total_orders):,.2f}")
             
             st.markdown("<br>", unsafe_allow_html=True) 
 
@@ -165,7 +163,6 @@ if df is not None:
 
             tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
-            # คำนวณสรุปยอดขายสาขา และ **บังคับให้ทุกสาขาที่ถูกเลือกแสดงเสมอ** (แม้ยอดเป็น 0)
             branch_sales = df_unique_bills.groupby('NAME')['GRANDTOTAL'].sum().reset_index()
             all_selected_df = pd.DataFrame({'NAME': selected_branches})
             branch_sales = pd.merge(all_selected_df, branch_sales, on='NAME', how='left')
@@ -179,7 +176,6 @@ if df is not None:
                     fig_bar.update_layout(showlegend=False, xaxis_title="", yaxis_title="ยอดขาย (บาท)", plot_bgcolor=chart_bg, paper_bgcolor=chart_bg, yaxis=dict(showgrid=True, gridcolor='#444'))
                     st.plotly_chart(fig_bar, use_container_width=True)
                 with col_pie:
-                    # ป้องกัน Error โดนัท กรองเฉพาะยอดที่ > 0
                     pie_data = branch_sales[branch_sales['GRANDTOTAL'] > 0]
                     if not pie_data.empty:
                         fig_pie = px.pie(pie_data, values='GRANDTOTAL', names='NAME', color_discrete_sequence=executive_colors, title="สัดส่วนยอดขาย (กราฟโดนัท)", hole=0.45)
@@ -201,7 +197,6 @@ if df is not None:
                         st.info("ไม่มียอดขายในช่วงเวลาที่เลือก")
 
             with tab3:
-                # ตารางตัวเลข ตอนนี้จะมีข้อมูลทุกสาขาที่คุณเลือกมาเสมอครับ
                 display_df = branch_sales.rename(columns={'NAME': 'ชื่อสาขา', 'GRANDTOTAL': 'ยอดขายทั้งสิ้น'})
                 display_df = display_df.sort_values('ชื่อสาขา')
                 st.dataframe(display_df.style.format({'ยอดขายทั้งสิ้น': '{:,.2f}'}).background_gradient(cmap='Blues', subset=['ยอดขายทั้งสิ้น']), use_container_width=True, hide_index=True)
