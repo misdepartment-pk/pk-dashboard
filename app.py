@@ -2,12 +2,11 @@ import streamlit as st
 import pandas as pd
 import datetime
 import plotly.express as px
+import os
 
-# 1. ตั้งค่าหน้าจอเว็บ
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 st.markdown("""
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style>
     div[data-testid="metric-container"] {
         background-color: #1e1e1e;
@@ -37,25 +36,26 @@ with col_title:
     st.title("PK Noodle Shop - Executive Dashboard")
     st.info("📱 **ทริค:** เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)")
 
-# ปิดระบบ Cache ชั่วคราว เพื่อให้อ่านไฟล์ใหม่สดๆ ทุกครั้งที่ทดสอบระบบ
 def load_local_data(filename):
+    if not os.path.exists(filename):
+        st.error(f"❌ หาไฟล์ `{filename}` ไม่เจอครับ กรุณาตรวจสอบว่าอัปโหลดไฟล์ชื่อนี้ไว้หรือยัง")
+        return None
     try:
         try: return pd.read_csv(filename, encoding='utf-8-sig', low_memory=False)
         except: return pd.read_csv(filename, encoding='tis-620', low_memory=False)
-    except: return None
+    except Exception as e:
+        st.error(f"❌ อ่านไฟล์ `{filename}` ไม่ได้: {e}")
+        return None
 
-# อัปเกรดฟังก์ชันวันที่ให้รองรับทุก Format
 def parse_thai_date(date_str):
     if pd.isna(date_str): return pd.NaT
     try:
         date_only = str(date_str).strip().split()[0]
         parts = date_only.replace('-', '/').split('/')
         if len(parts) == 3:
-            # ปรับแก้ พ.ศ. เป็น ค.ศ. อัตโนมัติ
             if int(parts[2]) > 2500: parts[2] = str(int(parts[2]) - 543)
             elif int(parts[0]) > 2500: parts[0] = str(int(parts[0]) - 543)
             date_only = "/".join(parts)
-            
         return pd.to_datetime(date_only, dayfirst=True, errors='coerce')
     except:
         return pd.NaT
@@ -78,10 +78,17 @@ if df is not None:
         df['FCANCEL'] = pd.to_numeric(df['FCANCEL'], errors='coerce').fillna(0)
         df = df[df['FCANCEL'] == 0]
 
-    if all(col in df.columns for col in ['GRANDTOTAL', 'NAME']):
-        
+    # ตรวจสอบคอลัมน์สำคัญ
+    missing_cols = [col for col in ['GRANDTOTAL', 'NAME'] if col not in df.columns]
+    if missing_cols:
+        st.error(f"❌ ไม่พบคอลัมน์สำคัญในไฟล์ sales data.CSV: `{', '.join(missing_cols)}`")
+        st.write("รายชื่อคอลัมน์ที่มีในไฟล์:", list(df.columns))
+    else:
         col_date = 'TRANDATE' if 'TRANDATE' in df.columns else ('CF_TRANDATE' if 'CF_TRANDATE' in df.columns else None)
-        if col_date: df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
+        if col_date: 
+            df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
+        else:
+            st.warning("⚠️ ไม่พบคอลัมน์วันที่ (TRANDATE หรือ CF_TRANDATE) ใน sales data.CSV")
             
         if df_product is not None:
             col_date_prod = 'TRANDATE' if 'TRANDATE' in df_product.columns else ('CF_TRANDATE' if 'CF_TRANDATE' in df_product.columns else None)
@@ -95,7 +102,6 @@ if df is not None:
             max_date = df['Parsed_Date'].dropna().max().date()
             
             st.sidebar.markdown("**📅 กรองตามช่วงวันที่**")
-            # เริ่มต้นให้โชว์ทุกวัน
             date_range = st.sidebar.date_input("เลือกวันที่เริ่มต้น - สิ้นสุด:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
             
             if len(date_range) == 2:
@@ -140,7 +146,6 @@ if df is not None:
             df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
             df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
-            # คลีนเลขที่บิลและจัดกลุ่มยอดบิล
             col_bill = 'TRANNO' if 'TRANNO' in df_filtered.columns else None
             if col_bill:
                 df_filtered[col_bill] = df_filtered[col_bill].astype(str).str.strip().str.upper()
