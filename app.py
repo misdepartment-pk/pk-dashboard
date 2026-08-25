@@ -49,7 +49,6 @@ def load_and_prep_data():
     df = read_csv_safe("sales data.CSV")
     df_prod = read_csv_safe("product data.CSV")
 
-    # ฟังก์ชันแปลงวันที่แบบกันตาย
     def parse_thai_date(date_str):
         if pd.isna(date_str): return pd.NaT
         try:
@@ -69,9 +68,6 @@ def load_and_prep_data():
         except: pass
         return pd.NaT
 
-    # ---------------------------------------------
-    # จัดเตรียมไฟล์ Sales data.CSV (ใช้อ้างอิงยอดขายรวม)
-    # ---------------------------------------------
     if df is not None and not df.empty:
         df.columns = df.columns.str.strip()
         if 'NAME' not in df.columns and len(df.columns) > 0:
@@ -80,14 +76,11 @@ def load_and_prep_data():
         if 'NAME' in df.columns: df['NAME'] = df['NAME'].astype(str).str.strip()
         if 'FCANCEL' in df.columns:
             df['FCANCEL'] = pd.to_numeric(df['FCANCEL'], errors='coerce').fillna(0)
-            df = df[df['FCANCEL'] == 0] # เอาเฉพาะบิลที่ไม่ยกเลิก
+            df = df[df['FCANCEL'] == 0]
             
         col_date = 'TRANDATE' if 'TRANDATE' in df.columns else ('CF_TRANDATE' if 'CF_TRANDATE' in df.columns else None)
         if col_date: df['Parsed_Date'] = df[col_date].apply(parse_thai_date)
 
-    # ---------------------------------------------
-    # จัดเตรียมไฟล์ Product data.CSV (ใช้อ้างอิงสินค้าขายดี)
-    # ---------------------------------------------
     if df_prod is not None and not df_prod.empty:
         df_prod.columns = df_prod.columns.str.strip()
         if 'NAME' in df_prod.columns: df_prod['NAME'] = df_prod['NAME'].astype(str).str.strip()
@@ -100,54 +93,70 @@ def load_and_prep_data():
 
     return df, df_prod
 
-# โหลดข้อมูลมาใช้งาน
 df_master, df_product_master = load_and_prep_data()
 
-# -------------------------------------------------------------
-# 🎯 เริ่มการแสดงผลและกรองข้อมูล
-# -------------------------------------------------------------
 if df_master is not None and not df_master.empty:
     df = df_master.copy()
     
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🔍 ตัวกรองข้อมูล")
+    st.sidebar.subheader("🔍 เมนูกรองข้อมูล")
     
     if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
         min_date = df['Parsed_Date'].dropna().min().date()
         max_date = df['Parsed_Date'].dropna().max().date()
+        today = datetime.date.today()
         
-        st.sidebar.markdown("**📅 กรองตามช่วงวันที่**")
-        date_range = st.sidebar.date_input("เลือกวันที่เริ่มต้น - สิ้นสุด:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+        st.sidebar.markdown("**📅 1. เลือกเวลาที่ต้องการดู**")
         
-        if len(date_range) == 2: start_date, end_date = date_range
-        elif len(date_range) == 1: start_date, end_date = date_range[0], date_range[0]
-        else: start_date, end_date = min_date, max_date
+        # --- เปลี่ยนระบบวันที่ให้เป็นแบบง่ายสุดๆ (เมนูดรอปดาวน์) ---
+        date_mode = st.sidebar.selectbox(
+            "เลือกช่วงเวลาแบบด่วน:",
+            ["ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"]
+        )
+        
+        if date_mode == "ดูข้อมูลทั้งหมด":
+            start_date, end_date = min_date, max_date
+        elif date_mode == "วันนี้":
+            start_date, end_date = today, today
+        elif date_mode == "เมื่อวาน":
+            yesterday = today - datetime.timedelta(days=1)
+            start_date, end_date = yesterday, yesterday
+        elif date_mode == "7 วันล่าสุด":
+            start_date, end_date = today - datetime.timedelta(days=7), today
+        elif date_mode == "เดือนนี้":
+            start_date, end_date = today.replace(day=1), today
+        else:
+            # โหมดกำหนดเอง จะแยกเป็น 2 กล่องชัดเจน เข้าใจง่าย
+            st.sidebar.markdown("👇 **เลือกวันที่เอง (ตั้งแต่ - จนถึง):**")
+            col_sd, col_ed = st.sidebar.columns(2)
+            with col_sd:
+                start_date = st.date_input("ตั้งแต่", value=min_date)
+            with col_ed:
+                end_date = st.date_input("จนถึง", value=max_date)
             
+        # นำวันที่มากรอง
         df = df[(df['Parsed_Date'].dt.date >= start_date) & (df['Parsed_Date'].dt.date <= end_date)]
         
-        st.sidebar.markdown("**🗓️ กรองตามเดือน**")
-        all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
-        month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
-        selected_months = st.sidebar.multiselect("เลือกเดือนที่ต้องการดู:", options=all_months, default=all_months, format_func=lambda x: month_names.get(x, str(x)))
-        if selected_months:
-            df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
+        # ซ่อนตัวกรองเดือนไว้ในปุ่มกด (เพื่อไม่ให้เมนูรก แต่ยังกดใช้ได้ถ้าต้องการ)
+        with st.sidebar.expander("➕ กรองตามเดือน (สำหรับดูข้ามปี)"):
+            all_months = sorted(df['Parsed_Date'].dropna().dt.month.unique())
+            month_names = {1:'มกราคม', 2:'กุมภาพันธ์', 3:'มีนาคม', 4:'เมษายน', 5:'พฤษภาคม', 6:'มิถุนายน', 7:'กรกฎาคม', 8:'สิงหาคม', 9:'กันยายน', 10:'ตุลาคม', 11:'พฤศจิกายน', 12:'ธันวาคม'}
+            selected_months = st.multiselect("เลือกเดือนที่ต้องการดู:", options=all_months, default=all_months, format_func=lambda x: month_names.get(x, str(x)))
+            if selected_months:
+                df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
     
-    st.sidebar.markdown("**🏢 กรองตามสาขา**")
+    st.sidebar.markdown("**🏢 2. เลือกสาขา**")
     all_branches = sorted(list(df_master['NAME'].dropna().unique()))
-    selected_branches = st.sidebar.multiselect("เลือกสาขาที่ต้องการดู:", all_branches, default=all_branches)
+    selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", all_branches, default=all_branches)
     
     if not selected_branches:
         st.warning("⚠️ กรุณาเลือกสาขาอย่างน้อย 1 สาขา จากเมนูด้านซ้าย")
     else:
-        # ---------------------------------------------
-        # ✅ ดึงข้อมูลตรงๆ จาก sales data.CSV ไมมีตัดซ้ำ!
-        # ---------------------------------------------
         df_filtered = df[df['NAME'].isin(selected_branches)].copy()
         
         df_filtered['GRANDTOTAL'] = df_filtered['GRANDTOTAL'].astype(str).str.replace(',', '').str.strip()
         df_filtered['GRANDTOTAL'] = pd.to_numeric(df_filtered['GRANDTOTAL'], errors='coerce').fillna(0)
 
-        # ใช้ข้อมูลทั้งหมดที่เหลือจากการกรองวันที่และสาขา มาคำนวณยอดขายเลย
         total_sales = df_filtered['GRANDTOTAL'].sum()
         total_orders = len(df_filtered)
         
@@ -163,7 +172,6 @@ if df_master is not None and not df_master.empty:
 
         tab1, tab2, tab3, tab4 = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
-        # จัดเตรียมข้อมูลสำหรับกราฟ Tab 1 และ Tab 3 (แสดงทุกสาขาที่ถูกเลือก)
         branch_sales = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index()
         all_selected_df = pd.DataFrame({'NAME': selected_branches})
         branch_sales = pd.merge(all_selected_df, branch_sales, on='NAME', how='left')
@@ -205,7 +213,6 @@ if df_master is not None and not df_master.empty:
             if df_product_master is not None and not df_product_master.empty:
                 df_prod_filtered = df_product_master.copy()
                 
-                # กรองสินค้าตามตัวกรองด้านซ้าย
                 if 'Parsed_Date' in df_prod_filtered.columns:
                     df_prod_filtered = df_prod_filtered[(df_prod_filtered['Parsed_Date'].dt.date >= start_date) & (df_prod_filtered['Parsed_Date'].dt.date <= end_date)]
                     if selected_months:
