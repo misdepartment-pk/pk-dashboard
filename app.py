@@ -6,11 +6,50 @@ import plotly.express as px
 import os
 import glob
 
-# 1. ตั้งค่าหน้าจอเว็บ
+# 1. ตั้งค่าหน้าจอเว็บ (ต้องอยู่บรรทัดแรกสุดเสมอ)
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
 
 # ==========================================
-# 🎨 ปรับแต่ง CSS
+# 🔐 ระบบ Login กำหนดสิทธิ์ผู้เข้าใช้งาน
+# ==========================================
+# 👇 คุณสามารถเพิ่ม/ลด หรือเปลี่ยน Username และ Password ตรงนี้ได้เลยครับ
+USER_CREDENTIALS = {
+    "admin": "1234",
+    "peter": "pk2026",
+    "manager": "5678"
+}
+
+def check_password():
+    """ตรวจสอบการ Login"""
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
+    if not st.session_state["password_correct"]:
+        st.markdown("<br><br><h2 style='text-align: center; color: #003f5c;'>🔒 เข้าสู่ระบบ PK Noodle Shop</h2>", unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1.5, 1, 1.5]) # จัดให้อยู่ตรงกลาง
+        with col2:
+            with st.form("login_form"):
+                username = st.text_input("👤 Username")
+                password = st.text_input("🔑 Password", type="password")
+                submit_button = st.form_submit_button("เข้าสู่ระบบ", use_container_width=True)
+                
+                if submit_button:
+                    if username in USER_CREDENTIALS and USER_CREDENTIALS[username] == password:
+                        st.session_state["password_correct"] = True
+                        st.session_state["current_user"] = username
+                        st.rerun() # รีเฟรชหน้าเพื่อเข้าสู่ Dashboard
+                    else:
+                        st.error("❌ Username หรือ Password ไม่ถูกต้อง!")
+        return False
+    return True
+
+# 🛑 ถ้ายังไม่ผ่าน Login ให้หยุดการทำงาน (ซ่อน Dashboard ทั้งหมด)
+if not check_password():
+    st.stop()
+
+# ==========================================
+# 🎨 ปรับแต่ง CSS (ซ่อนปุ่ม Streamlit ให้ดูโปร)
 # ==========================================
 st.markdown("""
 <style>
@@ -43,6 +82,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ==========================================
+# 📊 เริ่มต้น Dashboard (จะแสดงก็ต่อเมื่อ Login ผ่าน)
+# ==========================================
 col_logo, col_title = st.columns([1, 4]) 
 with col_logo:
     try: st.image("logo.png", width=150)
@@ -54,7 +96,6 @@ with col_title:
 
 @st.cache_data
 def load_and_prep_data():
-    # 🌟 ดึงไฟล์ยอดขายสาขาใหม่ทั้งหมดที่เพิ่งอัปโหลด
     csv_files = glob.glob("ยอดขายสาขา*.csv")
     if os.path.exists("sales data.CSV"): csv_files.append("sales data.CSV")
         
@@ -93,8 +134,6 @@ def load_and_prep_data():
 
     if not df.empty:
         df.columns = df.columns.str.strip()
-        
-        # 🌟 แปลงชื่อคอลัมน์จากไฟล์ใหม่ให้เข้ากับระบบเดิม
         if 'PDATA_CODE' in df.columns: df['TRANDATE'] = df['PDATA_CODE']
         elif 'CF_TRANDATE' in df.columns: df['TRANDATE'] = df['CF_TRANDATE']
             
@@ -121,6 +160,12 @@ df_master, df_product_master = load_and_prep_data()
 if df_master is not None and not df_master.empty:
     df = df_master.copy()
     
+    # === สร้างปุ่ม Logout ใน Sidebar ===
+    st.sidebar.markdown(f"👤 **ผู้ใช้งาน:** `{st.session_state.get('current_user', 'Unknown')}`")
+    if st.sidebar.button("🚪 ออกจากระบบ"):
+        st.session_state["password_correct"] = False
+        st.rerun()
+        
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔍 เมนูกรองข้อมูล")
     
@@ -128,7 +173,6 @@ if df_master is not None and not df_master.empty:
         min_date = df['Parsed_Date'].dropna().min().date()
         max_date = df['Parsed_Date'].dropna().max().date()
         
-        # 🌟 แก้ปัญหาเวลาเพี้ยน โดยบังคับใช้โซนเวลาประเทศไทย
         tz = pytz.timezone('Asia/Bangkok')
         today = datetime.datetime.now(tz).date()
         
@@ -168,7 +212,6 @@ if df_master is not None and not df_master.empty:
         df_filtered = df[df['NAME'].isin(selected_branches)].copy()
         total_sales = df_filtered['GRANDTOTAL'].sum()
         
-        # 🌟 คำนวณบิลให้รองรับทั้งไฟล์รายวันแบบใหม่และไฟล์ข้อมูลดิบ
         if 'PDATA_CNT' in df_filtered.columns:
             df_filtered['PDATA_CNT'] = pd.to_numeric(df_filtered['PDATA_CNT'], errors='coerce').fillna(0)
             total_orders = int(df_filtered['PDATA_CNT'].sum())
@@ -233,10 +276,9 @@ if df_master is not None and not df_master.empty:
                     df_prod_filtered = df_prod_filtered[df_prod_filtered['NAME'].isin(selected_branches)]
 
                 if df_prod_filtered.empty or ('ITEMNAME' not in df_prod_filtered.columns and 'PDATA_NAME' not in df_prod_filtered.columns):
-                    st.info("⚠️ ไม่มีข้อมูลสินค้าขายดีในช่วงเวลา หรือสาขาที่คุณเลือก (หรือโครงสร้างไฟล์สินค้าไม่ถูกต้อง)")
+                    st.info("⚠️ ไม่มีข้อมูลสินค้าขายดีในช่วงเวลา หรือสาขาที่คุณเลือก")
                 else:
                     col_amount, col_qty = st.columns(2)
-                    
                     item_col = 'ITEMNAME' if 'ITEMNAME' in df_prod_filtered.columns else 'PDATA_NAME'
                     amt_col = 'AMOUNT' if 'AMOUNT' in df_prod_filtered.columns else ('PDATA_NET_AMT' if 'PDATA_NET_AMT' in df_prod_filtered.columns else None)
                     qty_col = 'BASEQUANTITY' if 'BASEQUANTITY' in df_prod_filtered.columns else ('PDATA_QTY' if 'PDATA_QTY' in df_prod_filtered.columns else None)
@@ -264,4 +306,4 @@ if df_master is not None and not df_master.empty:
                                 fig_qty.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_title="จำนวนที่ขาย (ชิ้น)", yaxis_title="", plot_bgcolor=chart_bg, paper_bgcolor=chart_bg, coloraxis_showscale=False, height=600)
                                 st.plotly_chart(fig_qty, use_container_width=True)
 else:
-    st.error("⚠️ ไม่สามารถโหลดไฟล์ข้อมูลยอดขายได้ กรุณาตรวจสอบว่ามีไฟล์ `sales data.CSV` หรือไฟล์ที่ขึ้นต้นด้วย `ยอดขายสาขา` อยู่ในระบบ")
+    st.error("⚠️ ไม่สามารถโหลดไฟล์ข้อมูลยอดขายได้")
