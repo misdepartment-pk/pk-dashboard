@@ -12,7 +12,7 @@ st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layo
 # 🔐 ระบบ Login กำหนดสิทธิ์ผู้เข้าใช้งาน
 # ==========================================
 USER_CREDENTIALS = {
-    "peter": "0819413393",
+    "peter": "100100",
     "film": "1234",
     "pk": "1234"
 }
