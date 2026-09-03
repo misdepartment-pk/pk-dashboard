@@ -153,8 +153,8 @@ if df_master is not None and not df_master.empty:
         st.session_state["password_correct"] = False
         st.rerun()
         
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔍 เมนูกรองข้อมูล")
+    st.sidebar.markdown("**🏢 2. เลือกสาขา**")
+    all_branches = sorted(list(df_master['NAME'].dropna().unique()))
     
     if 'Parsed_Date' in df.columns and not df['Parsed_Date'].dropna().empty:
         min_date = df['Parsed_Date'].dropna().min().date()
