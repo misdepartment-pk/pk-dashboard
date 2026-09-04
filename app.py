@@ -103,22 +103,18 @@ def load_and_prep_data():
     if not df.empty:
         df.columns = df.columns.str.strip()
         
-        # ค้นหาคอลัมน์วันที่ (รองรับทั้งไฟล์ดิบและไฟล์จัดตารางแล้ว)
         date_col = next((c for c in ['TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE'] if c in df.columns), None)
         if date_col: df['Parsed_Date'] = df[date_col].apply(parse_thai_date)
             
-        # ค้นหาคอลัมน์ยอดขายรวม
         sales_col = next((c for c in ['GRANDTOTAL', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'ยอดขายทั้งสิ้น'] if c in df.columns), None)
         if sales_col: df['GRANDTOTAL'] = pd.to_numeric(df[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0)
         else: df['GRANDTOTAL'] = 0
             
-        # ค้นหาคอลัมน์สาขา
         branch_col = next((c for c in ['NAME', 'PSH_BR_NAME', 'สาขา'] if c in df.columns), None)
         if branch_col: df['NAME'] = df[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
         else: df['NAME'] = 'ไม่ระบุสาขา'
 
-        # คำนวณจำนวนบิล/จำนวนรายการ
-        if 'ยอดขาย(ชิ้น)' in df.columns: df['ORDER_COUNT'] = 1 # หากยุบรวมมาแล้ว ให้นับเป็นรายการ
+        if 'ยอดขาย(ชิ้น)' in df.columns: df['ORDER_COUNT'] = 1
         elif 'PDATA_CNT' in df.columns: df['ORDER_COUNT'] = pd.to_numeric(df['PDATA_CNT'], errors='coerce').fillna(1)
         else: df['ORDER_COUNT'] = 1
 
@@ -187,7 +183,8 @@ if df_master is not None and not df_master.empty:
             if selected_months: df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
     
     st.sidebar.markdown("**🏢 2. เลือกสาขา**")
-    all_branches = sorted(list(df['NAME'].dropna().unique()))
+    # ✅ ดึงชื่อสาขาทั้งหมดจากไฟล์หลักตลอดเวลา ป้องกันรายชื่อหายเมื่อไม่มียอดขาย
+    all_branches = sorted(list(df_master['NAME'].dropna().unique()))
     selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", all_branches, default=all_branches)
     
     st.sidebar.markdown("<div class='sidebar-footer'>Power by peter pak: v.10.0.0</div>", unsafe_allow_html=True)
@@ -203,6 +200,7 @@ if df_master is not None and not df_master.empty:
         col1.metric("ยอดขายรวมทั้งหมด (บาท)", f"฿{total_sales:,.2f}")
         col2.metric("จำนวนรายการ (บิล)", f"{total_orders:,}")
         if total_orders > 0: col3.metric("ยอดเฉลี่ยต่อบิล (บาท)", f"฿{(total_sales/total_orders):,.2f}")
+        else: col3.metric("ยอดเฉลี่ยต่อบิล (บาท)", "฿0.00")
         
         st.markdown("<br>", unsafe_allow_html=True) 
 
@@ -230,6 +228,8 @@ if df_master is not None and not df_master.empty:
                     fig_pie.update_traces(textposition='inside', textinfo='percent+label')
                     fig_pie.update_layout(plot_bgcolor=chart_bg, paper_bgcolor=chart_bg)
                     st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.info("ไม่มียอดขายในวันที่เลือก สำหรับแสดงกราฟโดนัท")
 
         with tab2:
             if 'Parsed_Date' in df_filtered.columns:
@@ -239,6 +239,8 @@ if df_master is not None and not df_master.empty:
                     fig_line.update_traces(line_color='#2f4b7c', line_width=3, marker_size=8)
                     fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)", plot_bgcolor=chart_bg, paper_bgcolor=chart_bg, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#e6e6e6'))
                     st.plotly_chart(fig_line, use_container_width=True)
+                else:
+                    st.info("ไม่มียอดขายในวันที่เลือก สำหรับแสดงกราฟเส้น")
 
         with tab3:
             display_df = branch_sales.rename(columns={'NAME': 'ชื่อสาขา', 'GRANDTOTAL': 'ยอดขายทั้งสิ้น'}).sort_values('ชื่อสาขา')
@@ -265,18 +267,22 @@ if df_master is not None and not df_master.empty:
                         st.markdown("**💰 จัดอันดับตาม 'มูลค่าขาย (บาท)'**")
                         if 'AMT_CLEAN' in df_prod_filtered.columns:
                             top_amount = df_prod_filtered.groupby('ITEMNAME_CLEAN')['AMT_CLEAN'].sum().reset_index().sort_values('AMT_CLEAN', ascending=False).head(20)
-                            if not top_amount.empty:
+                            if not top_amount.empty and top_amount['AMT_CLEAN'].sum() > 0:
                                 fig_amount = px.bar(top_amount, x='AMT_CLEAN', y='ITEMNAME_CLEAN', orientation='h', text_auto=',.2f', color='AMT_CLEAN', color_continuous_scale='Blues')
                                 fig_amount.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_title="มูลค่าขาย (บาท)", yaxis_title="", plot_bgcolor=chart_bg, paper_bgcolor=chart_bg, coloraxis_showscale=False, height=600)
                                 st.plotly_chart(fig_amount, use_container_width=True)
+                            else:
+                                st.info("ไม่มีข้อมูลมูลค่าขาย")
 
                     with col_qty:
                         st.markdown("**📦 จัดอันดับตาม 'จำนวนที่ขาย (ชิ้น)'**")
                         if 'QTY_CLEAN' in df_prod_filtered.columns:
                             top_qty = df_prod_filtered.groupby('ITEMNAME_CLEAN')['QTY_CLEAN'].sum().reset_index().sort_values('QTY_CLEAN', ascending=False).head(20)
-                            if not top_qty.empty:
+                            if not top_qty.empty and top_qty['QTY_CLEAN'].sum() > 0:
                                 fig_qty = px.bar(top_qty, x='QTY_CLEAN', y='ITEMNAME_CLEAN', orientation='h', text_auto=',.0f', color='QTY_CLEAN', color_continuous_scale='Oranges')
                                 fig_qty.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_title="จำนวนที่ขาย (ชิ้น)", yaxis_title="", plot_bgcolor=chart_bg, paper_bgcolor=chart_bg, coloraxis_showscale=False, height=600)
                                 st.plotly_chart(fig_qty, use_container_width=True)
+                            else:
+                                st.info("ไม่มีข้อมูลจำนวนชิ้น")
 else:
     st.error("⚠️ ไม่สามารถโหลดไฟล์ข้อมูลยอดขายได้ กรุณาตรวจสอบว่ามีไฟล์ `sales data.CSV` อยู่ในระบบ")
