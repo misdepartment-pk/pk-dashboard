@@ -4,6 +4,7 @@ import datetime
 import pytz
 import plotly.express as px
 import os
+import requests  # เพิ่มไลบรารีสำหรับต่อ API
 
 # 1. ตั้งค่าหน้าจอเว็บ (ต้องอยู่บรรทัดแรกสุดเสมอ)
 st.set_page_config(page_title="PK Noodle Shop Dashboard", page_icon="🍜", layout="wide")
@@ -69,22 +70,74 @@ with col_title:
     st.title("PK Noodle Shop - Executive Dashboard")
     st.info("📱 **ทริค:** เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)")
 
-@st.cache_data
+# ==========================================
+# 📡 ฟังก์ชันโหลดข้อมูล (API + CSV Fallback)
+# ==========================================
+@st.cache_data(ttl=180) # ดึงข้อมูลใหม่จาก API ทุก 3 นาที
 def load_and_prep_data():
     df, df_prod = pd.DataFrame(), pd.DataFrame()
     
-    # 🌟 อ่านไฟล์ sales data.CSV
-    if os.path.exists("sales data.CSV"):
-        try: df = pd.read_csv("sales data.CSV", encoding='utf-8-sig', low_memory=False)
-        except: df = pd.read_csv("sales data.CSV", encoding='tis-620', low_memory=False)
-            
-    # 🌟 อ่านไฟล์ product data.CSV
-    if os.path.exists("product data.CSV"):
-        try: df_prod = pd.read_csv("product data.CSV", encoding='utf-8-sig', low_memory=False)
-        except: df_prod = pd.read_csv("product data.CSV", encoding='tis-620', low_memory=False)
+    # ดึงค่า Secrets สำหรับ API
+    SENIORSOFT_CFG = st.secrets.get("seniorsoft", {})
+    SERVER_URL = SENIORSOFT_CFG.get("SERVER_URL", "https://p1.seniorsoft.com/promaxxapi")
+    MERCHANT_ID = SENIORSOFT_CFG.get("MERCHANT_ID", "88821678")
+    BRANCH_ID = SENIORSOFT_CFG.get("BRANCH_ID", "PK000")
+    TOKEN = SENIORSOFT_CFG.get("TOKEN", "7fUrDDMBdiGXBLcmv8GLXcJyKQi3RyxK76Haf6QRNi6AcXSKn77FXUmL4x5bXYFz")
+    AUTH_TYPE = SENIORSOFT_CFG.get("AUTH_TYPE", "BlueId")
 
+    headers = {
+        "Authorization": f"{AUTH_TYPE} {TOKEN}",
+        "MerchantID": MERCHANT_ID,
+        "BranchID": BRANCH_ID,
+        "Content-Type": "application/json"
+    }
+    
+    # กำหนดช่วงวันที่ดึงข้อมูลผ่าน API (ย้อนหลัง 60 วัน)
+    tz = pytz.timezone('Asia/Bangkok')
+    today_dt = datetime.datetime.now(tz)
+    start_str = (today_dt - datetime.timedelta(days=60)).strftime("%Y-%m-%d")
+    today_str = today_dt.strftime("%Y-%m-%d")
+    params = {"startDate": start_str, "endDate": today_str}
+    
+    api_success = False
+    
+    try:
+        # 1. ลองดึงยอดขายจาก API ก่อน
+        sales_res = requests.get(f"{SERVER_URL}/sales", headers=headers, params=params, timeout=10)
+        if sales_res.status_code == 200:
+            sales_json = sales_res.json()
+            data_list = sales_json.get('data', sales_json if isinstance(sales_json, list) else [])
+            df = pd.DataFrame(data_list)
+            
+            # 2. ลองดึงข้อมูลสินค้าจาก API
+            prod_res = requests.get(f"{SERVER_URL}/products", headers=headers, params=params, timeout=10)
+            if prod_res.status_code == 200:
+                prod_json = prod_res.json()
+                prod_list = prod_json.get('data', prod_json if isinstance(prod_json, list) else [])
+                df_prod = pd.DataFrame(prod_list)
+            
+            api_success = True
+    except Exception as e:
+        st.warning("⚠️ ไม่สามารถเชื่อมต่อ API ได้ กำลังใช้งานข้อมูลจากไฟล์ CSV แทน...")
+        api_success = False
+
+    # --- หาก API ล่ม ให้กลับไปอ่าน CSV (ระบบสำรอง) ---
+    if not api_success:
+        if os.path.exists("sales data.CSV"):
+            try: df = pd.read_csv("sales data.CSV", encoding='utf-8-sig', low_memory=False)
+            except: df = pd.read_csv("sales data.CSV", encoding='tis-620', low_memory=False)
+        if os.path.exists("product data.CSV"):
+            try: df_prod = pd.read_csv("product data.CSV", encoding='utf-8-sig', low_memory=False)
+            except: df_prod = pd.read_csv("product data.CSV", encoding='tis-620', low_memory=False)
+
+    # --- ฟังก์ชันแปลงวันที่ ---
     def parse_thai_date(date_str):
         if pd.isna(date_str) or str(date_str).strip() == '': return pd.NaT
+        # รองรับ Format แบบ ISO จาก API ด้วย (เช่น 2024-10-25T14:30:00)
+        if 'T' in str(date_str):
+            try: return pd.to_datetime(str(date_str).split('T')[0])
+            except: pass
+            
         try:
             date_only = str(date_str).strip().split()[0]
             parts = date_only.replace('-', '/').split('/')
@@ -101,46 +154,49 @@ def load_and_prep_data():
 
     # --- ทำความสะอาดไฟล์ยอดขาย ---
     if not df.empty:
-        df.columns = df.columns.str.strip()
+        df.columns = [str(c).upper().strip() for c in df.columns] # ทำเป็นตัวใหญ่ให้หมดเพื่อ Map ง่าย
         
-        date_col = next((c for c in ['TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE'] if c in df.columns), None)
+        date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE'] if c in df.columns), None)
         if date_col: df['Parsed_Date'] = df[date_col].apply(parse_thai_date)
             
-        sales_col = next((c for c in ['GRANDTOTAL', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'ยอดขายทั้งสิ้น'] if c in df.columns), None)
+        sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'ยอดขายทั้งสิ้น'] if c in df.columns), None)
         if sales_col: df['GRANDTOTAL'] = pd.to_numeric(df[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0)
         else: df['GRANDTOTAL'] = 0
             
-        branch_col = next((c for c in ['NAME', 'PSH_BR_NAME', 'สาขา'] if c in df.columns), None)
+        branch_col = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'NAME', 'PSH_BR_NAME', 'สาขา'] if c in df.columns), None)
         if branch_col: df['NAME'] = df[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
         else: df['NAME'] = 'ไม่ระบุสาขา'
 
         if 'ยอดขาย(ชิ้น)' in df.columns: df['ORDER_COUNT'] = 1
         elif 'PDATA_CNT' in df.columns: df['ORDER_COUNT'] = pd.to_numeric(df['PDATA_CNT'], errors='coerce').fillna(1)
-        else: df['ORDER_COUNT'] = 1
+        else: df['ORDER_COUNT'] = 1 # นับ 1 บิล
 
     # --- ทำความสะอาดไฟล์สินค้า ---
     if not df_prod.empty:
-        df_prod.columns = df_prod.columns.str.strip()
+        df_prod.columns = [str(c).upper().strip() for c in df_prod.columns]
         
-        date_col_p = next((c for c in ['TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE'] if c in df_prod.columns), None)
+        date_col_p = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE'] if c in df_prod.columns), None)
         if date_col_p: df_prod['Parsed_Date'] = df_prod[date_col_p].apply(parse_thai_date)
             
-        branch_col_p = next((c for c in ['NAME', 'PSH_BR_NAME', 'สาขา'] if c in df_prod.columns), None)
+        branch_col_p = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'NAME', 'PSH_BR_NAME', 'สาขา'] if c in df_prod.columns), None)
         if branch_col_p: df_prod['NAME'] = df_prod[branch_col_p].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
             
-        item_col = next((c for c in ['ITEMNAME', 'PSD_SHOW_SKUNAME', 'รายการสินค้า', 'PDATA_NAME'] if c in df_prod.columns), None)
+        item_col = next((c for c in ['ITEM_NAME', 'ITEMNAME', 'PSD_SHOW_SKUNAME', 'รายการสินค้า', 'PDATA_NAME'] if c in df_prod.columns), None)
         if item_col: df_prod['ITEMNAME_CLEAN'] = df_prod[item_col].astype(str).str.strip()
         
-        qty_col = next((c for c in ['BASEQUANTITY', 'PSD_QTY', 'ยอดขาย(ชิ้น)', 'PDATA_QTY'] if c in df_prod.columns), None)
+        qty_col = next((c for c in ['QTY', 'QUANTITY', 'BASEQUANTITY', 'PSD_QTY', 'ยอดขาย(ชิ้น)', 'PDATA_QTY'] if c in df_prod.columns), None)
         if qty_col: df_prod['QTY_CLEAN'] = pd.to_numeric(df_prod[qty_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0)
         
-        amt_col = next((c for c in ['AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT'] if c in df_prod.columns), None)
+        amt_col = next((c for c in ['AMOUNT', 'TOTALAMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT'] if c in df_prod.columns), None)
         if amt_col: df_prod['AMT_CLEAN'] = pd.to_numeric(df_prod[amt_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0)
 
     return df, df_prod
 
 df_master, df_product_master = load_and_prep_data()
 
+# ==========================================
+# 📊 ส่วนแสดงผล Dashboard
+# ==========================================
 if df_master is not None and not df_master.empty:
     df = df_master.copy()
     
@@ -159,7 +215,7 @@ if df_master is not None and not df_master.empty:
         today = datetime.datetime.now(tz).date()
         
         st.sidebar.markdown("**📅 1. เลือกเวลาที่ต้องการดู**")
-        date_mode = st.sidebar.selectbox("เลือกช่วงเวลาแบบด่วน:", ["ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"])
+        date_mode = st.sidebar.selectbox("เลือกช่วงเวลาแบบด่วน:", ["ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"], index=1)
         
         if date_mode == "ดูข้อมูลทั้งหมด": start_date, end_date = min_date, max_date
         elif date_mode == "วันนี้": start_date, end_date = today, today
@@ -183,11 +239,11 @@ if df_master is not None and not df_master.empty:
             if selected_months: df = df[df['Parsed_Date'].dt.month.isin(selected_months)]
     
     st.sidebar.markdown("**🏢 2. เลือกสาขา**")
-    # ✅ ดึงชื่อสาขาทั้งหมดจากไฟล์หลักตลอดเวลา ป้องกันรายชื่อหายเมื่อไม่มียอดขาย
+    # ดึงชื่อสาขาทั้งหมดจาก API มาแสดงอัตโนมัติ
     all_branches = sorted(list(df_master['NAME'].dropna().unique()))
     selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", all_branches, default=all_branches)
     
-    st.sidebar.markdown("<div class='sidebar-footer'>Power by peter pak: v.10.0.0</div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<div class='sidebar-footer'>Power by peter pak: v.10.0.0 (API Edition)</div>", unsafe_allow_html=True)
     
     if not selected_branches:
         st.warning("⚠️ กรุณาเลือกสาขาอย่างน้อย 1 สาขา จากเมนูด้านซ้าย")
@@ -285,4 +341,4 @@ if df_master is not None and not df_master.empty:
                             else:
                                 st.info("ไม่มีข้อมูลจำนวนชิ้น")
 else:
-    st.error("⚠️ ไม่สามารถโหลดไฟล์ข้อมูลยอดขายได้ กรุณาตรวจสอบว่ามีไฟล์ `sales data.CSV` อยู่ในระบบ")
+    st.error("⚠️ ไม่สามารถโหลดข้อมูลจาก API และไม่พบไฟล์ CSV สำรอง กรุณาตรวจสอบการเชื่อมต่อ")
