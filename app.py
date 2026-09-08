@@ -434,20 +434,24 @@ with tab_bestseller:
             ).reset_index()
             top_products.columns = ['ชื่อสินค้า', 'ยอดขายรวม', 'จำนวนที่ขาย']
             top_products = top_products[top_products['ยอดขายรวม'] > 0]
-            top_products = top_products.sort_values(by='ยอดขายรวม', ascending=False).head(20)
+            
+            # --- แก้ไข 1: เรียงลำดับตามจำนวนที่ขายจากมากไปน้อย ---
+            top_products = top_products.sort_values(by='จำนวนที่ขาย', ascending=False).head(20).reset_index(drop=True)
+            
+            # --- แก้ไข 2: เพิ่มคอลัมน์ลำดับ 1-20 ด้านหน้าสุด ---
+            top_products.insert(0, 'ลำดับ', range(1, len(top_products) + 1))
             
             if not top_products.empty:
-                # ปรับสัดส่วนคอลัมน์ซ้าย (ฝั่งกราฟ) ให้กว้างขึ้นเป็น 1.3 ต่อ 1
                 col_b1, col_b2 = st.columns([1.3, 1])
                 with col_b1:
                     st.markdown("###### Top 10 สินค้าขายดีที่สุด (ยอดขาย)")
                     
-                    df_top10 = top_products.head(10).sort_values(by='ยอดขายรวม', ascending=True)
-                    max_sales = df_top10['ยอดขายรวม'].max()
+                    # จัดเรียงฝั่งกราฟตามยอดขาย Top 10
+                    df_top10_chart = top_products.sort_values(by='ยอดขายรวม', ascending=True).tail(10)
+                    max_sales = df_top10_chart['ยอดขายรวม'].max()
                     
-                    # กำหนดสีแยกตามชื่อสินค้า และเลือกใช้พาเลทสีที่ดูง่าย
                     fig_pbar = px.bar(
-                        df_top10,
+                        df_top10_chart,
                         y='ชื่อสินค้า',
                         x='ยอดขายรวม',
                         orientation='h',
@@ -462,7 +466,6 @@ with tab_bestseller:
                         cliponaxis=False
                     )
                     
-                    # ปรับ layout เพิ่มระยะขอบขวา (r=90) และซ่อน legend เพื่อขยายพื้นที่กราฟ
                     fig_pbar.update_layout(
                         xaxis_title="ยอดขาย (บาท)", 
                         yaxis_title="", 
@@ -473,16 +476,18 @@ with tab_bestseller:
                         paper_bgcolor='rgba(0,0,0,0)'
                     )
                     
-                    # ขยายแกน X ฝั่งขวาเพิ่ม 22% เพื่อให้ตัวเลขมูลค่าแสดงผลได้ครบเต็มจำนวน ไม่โดนขอบตัด
                     fig_pbar.update_xaxes(range=[0, max_sales * 1.22])
-                    
                     st.plotly_chart(fig_pbar, use_container_width=True)
 
                 with col_b2:
                     st.markdown("###### ตารางรายละเอียดสินค้าขายดี 20 อันดับแรก")
+                    
+                    # --- แก้ไข 3: ใส่ hide_index=True เพื่อซ่อน Index ซ้ำซ้อนทางซ้าย ---
                     st.dataframe(
                         top_products.style.format({'ยอดขายรวม': '฿{:,.2f}', 'จำนวนที่ขาย': '{:,.0f}'}),
-                        use_container_width=True, height=430
+                        use_container_width=True, 
+                        height=430,
+                        hide_index=True
                     )
             else:
                 st.info("ไม่พบรายการสินค้าที่มียอดขายมากกว่า 0 บาท")
