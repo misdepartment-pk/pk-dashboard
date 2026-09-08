@@ -10,9 +10,12 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. PAGE CONFIG & CUSTOM CSS
 # ==========================================
+# ==========================================
+# 1. PAGE CONFIG & CUSTOM CSS
+# ==========================================
 st.set_page_config(
     page_title="PK NOODLE SHOP Dashboard",
-    page_icon="🍜",
+    page_icon="logo.png" if os.path.exists("logo.png") else "🍜",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -275,7 +278,11 @@ if quick_time != "ดูข้อมูลทั้งหมด" and not df_filt
 # 5. HEADER & TOP METRICS
 # ==========================================
 col_logo, col_space = st.columns([1, 4])
-with col_logo: st.markdown("### 🍜 PK NOODLE SHOP")
+with col_logo:
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=220)
+    else:
+        st.markdown("### 🍜 PK NOODLE SHOP")
 
 st.markdown('<div class="trick-banner">🧮 <b>ทริค:</b> เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)</div>', unsafe_allow_html=True)
 
