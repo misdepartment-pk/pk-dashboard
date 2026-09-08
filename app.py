@@ -89,11 +89,13 @@ def load_all_sales_data():
                 except: df_temp = pd.read_csv(filename, encoding='tis-620', low_memory=False)
                 
                 df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
+                # บันทึกชื่อไฟล์ต้นทางไว้สำหรับแยกแท็บ
+                df_temp['FILE_SOURCE'] = filename
                 dfs.append(df_temp)
             except: pass
                 
     if not dfs:
-        return pd.DataFrame(columns=['Parsed_Date', 'Year_BE', 'NAME', 'GRANDTOTAL', 'ORDER_COUNT'])
+        return pd.DataFrame(columns=['Parsed_Date', 'Year_BE', 'NAME', 'GRANDTOTAL', 'ORDER_COUNT', 'FILE_SOURCE'])
         
     df_combined = pd.concat(dfs, ignore_index=True).drop_duplicates()
     
@@ -166,7 +168,7 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Powered by peter pak: v.10.0.0 (API Edition)")
 
 # ==========================================
-# 4. FILTERING LOGIC (✅ อัปเดตใหม่ ให้ทำงานประสานกัน)
+# 4. FILTERING LOGIC
 # ==========================================
 df_filtered = df_all.copy()
 
@@ -188,9 +190,8 @@ if selected_months:
     target_month_nums = [month_map[m] for m in selected_months if m in month_map]
     df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.month.isin(target_month_nums)]
 
-# กรอง 4: วัน / ช่วงเวลาแบบด่วน
+# กรอง 4: วัน / ช่วงเวลาแบบด่วน (บวก 7 ชั่วโมง ป้องกัน Server Timezone เพี้ยน)
 if quick_time != "ดูข้อมูลทั้งหมด" and not df_filtered.empty:
-    # ✅ ตั้งค่า Timezone เป็นเวลาประเทศไทย (UTC+7) เสมอ เพื่อให้คำว่า "วันนี้/เมื่อวาน" ตรงกับไทย
     current_time_th = datetime.utcnow() + timedelta(hours=7)
     today_date = current_time_th.date()
     
@@ -237,9 +238,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ==========================================
 # 6. CHART DRAWING HELPER FUNCTIONS
 # ==========================================
-def render_branch_visualizations(df_source, year_label):
+def render_branch_visualizations(df_source, title_label=""):
     if df_source.empty:
-        st.info(f"ไม่พบข้อมูลยอดขายสำหรับปี {year_label} (ภายใต้เงื่อนไขการกรองปัจจุบัน)")
+        st.info(f"ไม่พบข้อมูลยอดขายสำหรับ {title_label} (ภายใต้เงื่อนไขการกรองปัจจุบัน)")
         return
 
     branch_summary = df_source.groupby('NAME')['GRANDTOTAL'].sum().reset_index()
@@ -248,35 +249,36 @@ def render_branch_visualizations(df_source, year_label):
     c_bar, c_donut = st.columns([1.2, 1])
     
     with c_bar:
-        st.markdown(f"##### ยอดขาย (กราฟแท่ง) - ปี {year_label}")
+        st.markdown(f"##### ยอดขาย (กราฟแท่ง) - {title_label}")
         fig_bar = px.bar(branch_summary, x='NAME', y='GRANDTOTAL', color='NAME', text='GRANDTOTAL', color_discrete_sequence=px.colors.qualitative.Set2)
         fig_bar.update_traces(texttemplate='%{text:,.2f}', textposition='outside', cliponaxis=False)
         fig_bar.update_layout(xaxis_title="", yaxis_title="ยอดขาย (บาท)", showlegend=False, height=400, margin=dict(l=20, r=20, t=30, b=20), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with c_donut:
-        st.markdown(f"##### สัดส่วนยอดขาย (กราฟโดนัท) - ปี {year_label}")
+        st.markdown(f"##### สัดส่วนยอดขาย (กราฟโดนัท) - {title_label}")
         fig_donut = px.pie(branch_summary, values='GRANDTOTAL', names='NAME', hole=0.5, color_discrete_sequence=px.colors.qualitative.Set2)
         fig_donut.update_traces(textinfo='percent+label', insidetextorientation='radial')
         fig_donut.update_layout(showlegend=True, height=400, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_donut, use_container_width=True)
 
 # ==========================================
-# 7. TABS NAVIGATION (✅ แก้ไขให้ดึงข้อมูลจากตัวแปรที่กรองแล้ว)
+# 7. TABS NAVIGATION
 # ==========================================
-tab_2569, tab_2568, tab_trend, tab_table, tab_bestseller = st.tabs([
-    "🏢 ยอดรวมสาขา2569", "🏢 ยอดรวมสาขา2568", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"
+tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs([
+    "🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"
 ])
 
-with tab_2569:
-    # ✅ ใช้ df_filtered แทน df_all เพื่อให้กราฟเปลี่ยนตามเวลาที่กรอง
-    df_2569 = df_filtered[df_filtered['Year_BE'] == 2569]
-    render_branch_visualizations(df_2569, "2569")
-
-with tab_2568:
-    # ✅ ใช้ df_filtered แทน df_all 
-    df_2568 = df_filtered[df_filtered['Year_BE'] == 2568]
-    render_branch_visualizations(df_2568, "2568")
+with tab_branch:
+    # ดึงเฉพาะข้อมูลที่มาจากไฟล์ sales data.csv / sales_data.csv เท่านั้น
+    if 'FILE_SOURCE' in df_filtered.columns:
+        df_sales_data = df_filtered[
+            df_filtered['FILE_SOURCE'].astype(str).str.lower().str.contains('sales data|sales_data', na=False)
+        ]
+    else:
+        df_sales_data = df_filtered
+        
+    render_branch_visualizations(df_sales_data, "ไฟล์ sales data")
 
 with tab_trend:
     st.markdown("##### 📈 เทรนด์ยอดขายรายวัน")
