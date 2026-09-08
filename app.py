@@ -19,10 +19,8 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Global styles */
     .main { background-color: #f8f9fa; }
     
-    /* Top banner card */
     .metric-card {
         background-color: #ffffff; border-radius: 12px; padding: 16px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;
@@ -30,14 +28,12 @@ st.markdown("""
     .metric-value { font-size: 28px; font-weight: 700; color: #1e293b; }
     .metric-label { font-size: 14px; color: #64748b; margin-bottom: 4px; }
     
-    /* Trick Banner */
     .trick-banner {
         background-color: #e0f2fe; color: #0369a1; padding: 10px 16px;
         border-radius: 8px; font-size: 14px; margin-bottom: 20px;
         display: flex; align-items: center; gap: 8px;
     }
     
-    /* Custom Tab Styling */
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
         height: 45px; white-space: pre-wrap; background-color: #ffffff;
@@ -78,20 +74,27 @@ def parse_thai_date(date_str):
 @st.cache_data(ttl=300)
 def load_all_sales_data():
     dfs = []
-    possible_csvs = ["Sale Data2568.csv", "Sale Data2868.csv", "sales data.CSV", "sales_data.csv", "Sale Data2569.csv"]
-    branch_files = glob.glob("ยอดขายสาขา*.csv")
-    all_files = list(set(possible_csvs + branch_files))
+    files_in_dir = os.listdir('.') if os.path.exists('.') else []
     
-    for filename in all_files:
-        if os.path.exists(filename):
-            try:
+    sales_files = [
+        f for f in files_in_dir 
+        if any(k in f.lower() for k in ['sale', 'sales', 'ยอดขาย']) 
+        and not any(p in f.lower() for p in ['product', 'สินค้า'])
+        and f.lower().endswith(('.csv', '.xlsx', '.xls'))
+    ]
+    
+    for filename in sales_files:
+        try:
+            if filename.lower().endswith('.csv'):
                 try: df_temp = pd.read_csv(filename, encoding='utf-8-sig', low_memory=False)
                 except: df_temp = pd.read_csv(filename, encoding='tis-620', low_memory=False)
+            else:
+                df_temp = pd.read_excel(filename)
                 
-                df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
-                df_temp['FILE_SOURCE'] = filename
-                dfs.append(df_temp)
-            except: pass
+            df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
+            df_temp['FILE_SOURCE'] = filename
+            dfs.append(df_temp)
+        except: pass
                 
     if not dfs:
         return pd.DataFrame(columns=['Parsed_Date', 'Year_BE', 'NAME', 'GRANDTOTAL', 'ORDER_COUNT', 'FILE_SOURCE'])
@@ -122,54 +125,65 @@ def load_all_sales_data():
 
     return df_combined
 
-@st.cache_data(ttl=300)
-def load_product_data():
-    dfs = []
-    possible_csvs = ["product data.csv", "product_data.csv", "Product Data.csv", "Product_Data.csv", "PRODUCT DATA.csv", "productdata.csv"]
-    matched_files = glob.glob("*product*data*.csv") + glob.glob("*Product*Data*.csv") + glob.glob("*PRODUCT*DATA*.csv")
-    all_files = list(set(possible_csvs + matched_files))
+def process_product_dataframe(df_raw):
+    if df_raw.empty:
+        return pd.DataFrame()
     
-    for filename in all_files:
-        if os.path.exists(filename):
-            try:
+    df_p = df_raw.copy()
+    df_p.columns = [str(c).upper().strip() for c in df_p.columns]
+    
+    date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE', 'PDATA_DATE', 'DATE'] if c in df_p.columns), None)
+    if date_col: df_p['Parsed_Date'] = df_p[date_col].apply(parse_thai_date)
+    else: df_p['Parsed_Date'] = pd.NaT
+
+    df_p['Year_BE'] = df_p['Parsed_Date'].dt.year + 543
+    
+    branch_col = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'NAME', 'PSH_BR_NAME', 'สาขา'] if c in df_p.columns), None)
+    if branch_col:
+        df_p['NAME'] = df_p[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
+    else: df_p['NAME'] = 'สาขาหลัก'
+
+    sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'NET_AMT', 'TOTAL'] if c in df_p.columns), None)
+    if sales_col:
+        df_p['GRANDTOTAL'] = pd.to_numeric(
+            df_p[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce'
+        ).fillna(0)
+    else: df_p['GRANDTOTAL'] = 0.0
+
+    qty_col = next((c for c in ['PDATA_QTY', 'QTY', 'AMOUNT_QTY', 'จำนวน', 'QUANTITY'] if c in df_p.columns), None)
+    if qty_col:
+        df_p['QTY'] = pd.to_numeric(
+            df_p[qty_col].astype(str).str.replace(',', '').str.strip(), errors='coerce'
+        ).fillna(1)
+    else: df_p['QTY'] = 1
+
+    return df_p
+
+@st.cache_data(ttl=300)
+def load_product_data_from_folder():
+    dfs = []
+    files_in_dir = os.listdir('.') if os.path.exists('.') else []
+    
+    product_files = [
+        f for f in files_in_dir 
+        if any(k in f.lower() for k in ['product', 'pdata', 'สินค้า', 'item']) 
+        and f.lower().endswith(('.csv', '.xlsx', '.xls'))
+    ]
+    
+    for filename in product_files:
+        try:
+            if filename.lower().endswith('.csv'):
                 try: df_temp = pd.read_csv(filename, encoding='utf-8-sig', low_memory=False)
                 except: df_temp = pd.read_csv(filename, encoding='tis-620', low_memory=False)
+            else:
+                df_temp = pd.read_excel(filename)
+            dfs.append(df_temp)
+        except: pass
                 
-                df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
-                dfs.append(df_temp)
-            except: pass
-                
-    if not dfs:
-        return pd.DataFrame()
-        
-    df_combined = pd.concat(dfs, ignore_index=True).drop_duplicates()
-    
-    date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE', 'PDATA_DATE', 'DATE'] if c in df_combined.columns), None)
-    if date_col: df_combined['Parsed_Date'] = df_combined[date_col].apply(parse_thai_date)
-    else: df_combined['Parsed_Date'] = pd.NaT
-
-    df_combined['Year_BE'] = df_combined['Parsed_Date'].dt.year + 543
-    
-    branch_col = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'NAME', 'PSH_BR_NAME', 'สาขา'] if c in df_combined.columns), None)
-    if branch_col:
-        df_combined['NAME'] = df_combined[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
-    else: df_combined['NAME'] = 'สาขาหลัก'
-
-    sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'NET_AMT', 'TOTAL'] if c in df_combined.columns), None)
-    if sales_col:
-        df_combined['GRANDTOTAL'] = pd.to_numeric(
-            df_combined[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce'
-        ).fillna(0)
-    else: df_combined['GRANDTOTAL'] = 0.0
-
-    qty_col = next((c for c in ['PDATA_QTY', 'QTY', 'AMOUNT_QTY', 'จำนวน', 'QUANTITY'] if c in df_combined.columns), None)
-    if qty_col:
-        df_combined['QTY'] = pd.to_numeric(
-            df_combined[qty_col].astype(str).str.replace(',', '').str.strip(), errors='coerce'
-        ).fillna(1)
-    else: df_combined['QTY'] = 1
-
-    return df_combined
+    if dfs:
+        combined = pd.concat(dfs, ignore_index=True).drop_duplicates()
+        return process_product_dataframe(combined)
+    return pd.DataFrame()
 
 df_all = load_all_sales_data()
 
@@ -345,26 +359,44 @@ with tab_table:
 
 with tab_bestseller:
     st.markdown("##### 🍜 รายงานสินค้าขายดี (คำนวณจากไฟล์ Product Data)")
-    df_product = load_product_data()
     
+    # 1. ค้นหาไฟล์อัตโนมัติจากโฟลเดอร์
+    df_product = load_product_data_from_folder()
+    
+    # 2. แสดงตัวเลือกอัปโหลดไฟล์ในหน้าเว็บกรณีหาไฟล์ในโฟลเดอร์ไม่เจอ
+    if df_product.empty:
+        st.warning("⚠️ ยังไม่พบไฟล์ Product Data ในโฟลเดอร์ของแอป")
+        uploaded_pfile = st.file_uploader(
+            "📂 เลือกอัปโหลดไฟล์ Product Data (รองรับ .csv, .xlsx) เพื่อประมวลผลทันที:", 
+            type=['csv', 'xlsx', 'xls'],
+            key="p_file_uploader"
+        )
+        if uploaded_pfile is not None:
+            try:
+                if uploaded_pfile.name.lower().endswith('.csv'):
+                    try: df_raw = pd.read_csv(uploaded_pfile, encoding='utf-8-sig', low_memory=False)
+                    except: df_raw = pd.read_csv(uploaded_pfile, encoding='tis-620', low_memory=False)
+                else:
+                    df_raw = pd.read_excel(uploaded_pfile)
+                df_product = process_product_dataframe(df_raw)
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ที่อัปโหลด: {e}")
+    
+    # 3. แสดงผลข้อมูลสินค้าขายดี
     if not df_product.empty:
         df_p_filtered = df_product.copy()
         
-        # 1. กรองปี
         if selected_years and 'Year_BE' in df_p_filtered.columns and not df_p_filtered['Year_BE'].isna().all():
             df_p_filtered = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
             
-        # 2. กรองสาขา
         if selected_branches and 'NAME' in df_p_filtered.columns:
             df_p_filtered = df_p_filtered[df_p_filtered['NAME'].isin(selected_branches)]
             
-        # 3. กรองเดือน
         if selected_months and 'Parsed_Date' in df_p_filtered.columns and not df_p_filtered['Parsed_Date'].isna().all():
             month_map = {m: i+1 for i, m in enumerate(month_names)}
             target_month_nums = [month_map[m] for m in selected_months if m in month_map]
             df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.month.isin(target_month_nums)]
             
-        # 4. กรองช่วงเวลาด่วน
         if quick_time != "ดูข้อมูลทั้งหมด" and not df_p_filtered.empty and 'Parsed_Date' in df_p_filtered.columns and not df_p_filtered['Parsed_Date'].isna().all():
             current_time_th = datetime.utcnow() + timedelta(hours=7)
             today_date = current_time_th.date()
@@ -411,5 +443,3 @@ with tab_bestseller:
                 )
         else:
             st.info("ไม่พบข้อมูลสินค้าตรงตามเงื่อนไขการกรองที่เลือก")
-    else:
-        st.warning("ไม่พบไฟล์ `product data.csv` ในระบบ (กรุณาตรวจสอบว่ามีไฟล์ชื่อ product data.csv หรือ product_data.csv อยู่ในโฟลเดอร์ของแอป)")
