@@ -20,20 +20,17 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main { background-color: #f8f9fa; }
-    
     .metric-card {
         background-color: #ffffff; border-radius: 12px; padding: 16px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;
     }
     .metric-value { font-size: 28px; font-weight: 700; color: #1e293b; }
     .metric-label { font-size: 14px; color: #64748b; margin-bottom: 4px; }
-    
     .trick-banner {
         background-color: #e0f2fe; color: #0369a1; padding: 10px 16px;
         border-radius: 8px; font-size: 14px; margin-bottom: 20px;
         display: flex; align-items: center; gap: 8px;
     }
-    
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
         height: 45px; white-space: pre-wrap; background-color: #ffffff;
@@ -141,9 +138,12 @@ def process_product_dataframe(df_raw):
     branch_col = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'NAME', 'PSH_BR_NAME', 'สาขา'] if c in df_p.columns), None)
     if branch_col:
         df_p['NAME'] = df_p[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
-    else: df_p['NAME'] = 'สาขาหลัก'
+        df_p['HAS_BRANCH_COL'] = True
+    else:
+        df_p['NAME'] = 'สาขาหลัก'
+        df_p['HAS_BRANCH_COL'] = False
 
-    sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'NET_AMT', 'TOTAL'] if c in df_p.columns), None)
+    sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'NET_AMT', 'TOTAL', 'PRICE', 'SUM'] if c in df_p.columns), None)
     if sales_col:
         df_p['GRANDTOTAL'] = pd.to_numeric(
             df_p[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce'
@@ -223,10 +223,10 @@ if not all_branches: all_branches = ["ศรีเมือง", "ทุ่ง�
 selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", options=all_branches, default=all_branches)
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Powered by peter pak: v.10.0.0 (API Edition)")
+st.sidebar.caption("Powered by peter pak: v.10.1.0")
 
 # ==========================================
-# 4. FILTERING LOGIC
+# 4. FILTERING LOGIC FOR MAIN DASHBOARD
 # ==========================================
 df_filtered = df_all.copy()
 
@@ -360,14 +360,14 @@ with tab_table:
 with tab_bestseller:
     st.markdown("##### 🍜 รายงานสินค้าขายดี (คำนวณจากไฟล์ Product Data)")
     
-    # 1. ค้นหาไฟล์อัตโนมัติจากโฟลเดอร์
+    # 1. โหลดข้อมูลจากไฟล์ Product Data
     df_product = load_product_data_from_folder()
     
-    # 2. แสดงตัวเลือกอัปโหลดไฟล์ในหน้าเว็บกรณีหาไฟล์ในโฟลเดอร์ไม่เจอ
+    # 2. ตัวเลือกการอัปโหลดไฟล์ตรงจากหน้าเว็บ
     if df_product.empty:
-        st.warning("⚠️ ยังไม่พบไฟล์ Product Data ในโฟลเดอร์ของแอป")
+        st.info("💡 หากไม่พบไฟล์ในโฟลเดอร์ สามารถเลือกอัปโหลดไฟล์ Product Data เพื่อประมวลผลทันทีได้ครับ")
         uploaded_pfile = st.file_uploader(
-            "📂 เลือกอัปโหลดไฟล์ Product Data (รองรับ .csv, .xlsx) เพื่อประมวลผลทันที:", 
+            "📂 เลือกอัปโหลดไฟล์ Product Data (.csv หรือ .xlsx):", 
             type=['csv', 'xlsx', 'xls'],
             key="p_file_uploader"
         )
@@ -380,66 +380,83 @@ with tab_bestseller:
                     df_raw = pd.read_excel(uploaded_pfile)
                 df_product = process_product_dataframe(df_raw)
             except Exception as e:
-                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ที่อัปโหลด: {e}")
-    
-    # 3. แสดงผลข้อมูลสินค้าขายดี
+                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+
+    # 3. ประมวลผลเมื่อมีข้อมูล
     if not df_product.empty:
         df_p_filtered = df_product.copy()
         
+        # Smart Branch Filtering (ไม่ตัดข้อมูลทิ้งถ้าไม่เจอสาขา)
+        if selected_branches and df_p_filtered.get('HAS_BRANCH_COL', [False])[0]:
+            matched_p = df_p_filtered[df_p_filtered['NAME'].isin(selected_branches)]
+            if not matched_p.empty:
+                df_p_filtered = matched_p
+        
+        # Smart Year Filtering
         if selected_years and 'Year_BE' in df_p_filtered.columns and not df_p_filtered['Year_BE'].isna().all():
-            df_p_filtered = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
-            
-        if selected_branches and 'NAME' in df_p_filtered.columns:
-            df_p_filtered = df_p_filtered[df_p_filtered['NAME'].isin(selected_branches)]
-            
-        if selected_months and 'Parsed_Date' in df_p_filtered.columns and not df_p_filtered['Parsed_Date'].isna().all():
-            month_map = {m: i+1 for i, m in enumerate(month_names)}
-            target_month_nums = [month_map[m] for m in selected_months if m in month_map]
-            df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.month.isin(target_month_nums)]
-            
-        if quick_time != "ดูข้อมูลทั้งหมด" and not df_p_filtered.empty and 'Parsed_Date' in df_p_filtered.columns and not df_p_filtered['Parsed_Date'].isna().all():
+            matched_y = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
+            if not matched_y.empty:
+                df_p_filtered = matched_y
+
+        # Smart Quick Time Filtering
+        if quick_time != "ดูข้อมูลทั้งหมด" and 'Parsed_Date' in df_p_filtered.columns and not df_p_filtered['Parsed_Date'].isna().all():
             current_time_th = datetime.utcnow() + timedelta(hours=7)
             today_date = current_time_th.date()
+            matched_q = pd.DataFrame()
             if quick_time == "วันนี้":
-                df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == today_date]
+                matched_q = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == today_date]
             elif quick_time == "เมื่อวาน":
-                df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == (today_date - timedelta(days=1))]
+                matched_q = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == (today_date - timedelta(days=1))]
             elif quick_time == "7 วันล่าสุด":
-                df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=7))]
+                matched_q = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=7))]
             elif quick_time == "30 วันล่าสุด":
-                df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=30))]
+                matched_q = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=30))]
             elif quick_time == "เดือนนี้":
-                df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.month == today_date.month) & (df_p_filtered['Parsed_Date'].dt.year == today_date.year)]
+                matched_q = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.month == today_date.month) & (df_p_filtered['Parsed_Date'].dt.year == today_date.year)]
             elif quick_time == "กำหนดเอง (เลือกปฏิทิน)" and start_date and end_date:
-                df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.date >= start_date) & (df_p_filtered['Parsed_Date'].dt.date <= end_date)]
+                matched_q = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.date >= start_date) & (df_p_filtered['Parsed_Date'].dt.date <= end_date)]
+            
+            if not matched_q.empty:
+                df_p_filtered = matched_q
 
-        p_col = next((c for c in ['PDATA_NAME', 'PRODUCT_NAME', 'P_NAME', 'NAME_1', 'ชื่อสินค้า', 'PRODUCT', 'ITEM_NAME', 'DESCR'] if c in df_p_filtered.columns), None)
-        
+        # Auto-detect Product Column Name (ขยายรายการคอลัมน์)
+        possible_p_cols = ['PDATA_NAME', 'PRODUCT_NAME', 'P_NAME', 'NAME_1', 'ชื่อสินค้า', 'PRODUCT', 'ITEM_NAME', 'DESCR', 'ITEMNAME', 'PROD_NAME', 'DESCRIPTION', 'TITLE', 'GOODS_NAME', 'สินค้า', 'รายการ', 'ชื่อรายการ', 'NAME_TH', 'NAME']
+        p_col = next((c for c in possible_p_cols if c in df_p_filtered.columns and c != 'NAME' or (c == 'NAME' and not df_p_filtered.get('HAS_BRANCH_COL', [False])[0])), None)
+
+        # ถ้าหาคอลัมน์ชื่อสินค้าไม่เจอ จะแสดง Dropdown ให้ผู้ใช้ระบุเองได้
+        if not p_col:
+            st.warning("⚠️ ไม่พบชื่อคอลัมน์สินค้าอัตโนมัติ โปรดเลือกคอลัมน์ที่เป็น **ชื่อสินค้า** จากรายการด้านล่าง:")
+            p_col = st.selectbox("เลือกคอลัมน์ชื่อสินค้า:", options=[c for c in df_p_filtered.columns if c not in ['GRANDTOTAL', 'QTY', 'Year_BE', 'Parsed_Date', 'HAS_BRANCH_COL']])
+
         if p_col and not df_p_filtered.empty:
             top_products = df_p_filtered.groupby(p_col).agg(
                 total_sales=('GRANDTOTAL', 'sum'),
                 total_qty=('QTY', 'sum')
             ).reset_index()
             top_products.columns = ['ชื่อสินค้า', 'ยอดขายรวม', 'จำนวนที่ขาย']
+            top_products = top_products[top_products['ยอดขายรวม'] > 0]
             top_products = top_products.sort_values(by='ยอดขายรวม', ascending=False).head(20)
             
-            col_b1, col_b2 = st.columns([1, 1.2])
-            with col_b1:
-                st.markdown("###### Top 10 สินค้าขายดีที่สุด (ยอดขาย)")
-                fig_pbar = px.bar(
-                    top_products.head(10).sort_values(by='ยอดขายรวม', ascending=True),
-                    y='ชื่อสินค้า', x='ยอดขายรวม', orientation='h', text='ยอดขายรวม',
-                    color_discrete_sequence=['#ef4444']
-                )
-                fig_pbar.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
-                fig_pbar.update_layout(xaxis_title="ยอดขาย (บาท)", yaxis_title="", height=400, margin=dict(l=20, r=20, t=20, b=20))
-                st.plotly_chart(fig_pbar, use_container_width=True)
+            if not top_products.empty:
+                col_b1, col_b2 = st.columns([1, 1.2])
+                with col_b1:
+                    st.markdown("###### Top 10 สินค้าขายดีที่สุด (ยอดขาย)")
+                    fig_pbar = px.bar(
+                        top_products.head(10).sort_values(by='ยอดขายรวม', ascending=True),
+                        y='ชื่อสินค้า', x='ยอดขายรวม', orientation='h', text='ยอดขายรวม',
+                        color_discrete_sequence=['#ef4444']
+                    )
+                    fig_pbar.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
+                    fig_pbar.update_layout(xaxis_title="ยอดขาย (บาท)", yaxis_title="", height=420, margin=dict(l=20, r=20, t=20, b=20), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_pbar, use_container_width=True)
 
-            with col_b2:
-                st.markdown("###### ตารางรายละเอียดสินค้าขายดี 20 อันดับแรก")
-                st.dataframe(
-                    top_products.style.format({'ยอดขายรวม': '฿{:,.2f}', 'จำนวนที่ขาย': '{:,.0f}'}),
-                    use_container_width=True, height=400
-                )
+                with col_b2:
+                    st.markdown("###### ตารางรายละเอียดสินค้าขายดี 20 อันดับแรก")
+                    st.dataframe(
+                        top_products.style.format({'ยอดขายรวม': '฿{:,.2f}', 'จำนวนที่ขาย': '{:,.0f}'}),
+                        use_container_width=True, height=420
+                    )
+            else:
+                st.info("ไม่พบรายการสินค้าที่มียอดขายมากกว่า 0 บาท")
         else:
-            st.info("ไม่พบข้อมูลสินค้าตรงตามเงื่อนไขการกรองที่เลือก")
+            st.info("ไม่พบข้อมูลสินค้าในการประมวลผล")
