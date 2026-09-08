@@ -292,6 +292,16 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ==========================================
 # 6. CHART DRAWING HELPER FUNCTIONS
 # ==========================================
+# กำหนดสีประจำสาขา
+branch_color_map = {
+    'ศรีเมือง': '#EF4444',  # สีแดง
+    'ทุ่งปอ': '#3B82F6',   # สีฟ้า
+    'เจ้าพรหม': '#A855F7',  # สีม่วง
+    'บ้านไร่': '#10B981',   # สีเขียว
+    'เทศบาล': '#EAB308',  # สีเหลือง
+    'บ้านโป่ง': '#EC4899'   # สีชมพู
+}
+
 def render_branch_visualizations(df_source):
     if df_source.empty:
         st.info("ไม่พบข้อมูลยอดขาย (ภายใต้เงื่อนไขการกรองปัจจุบัน)")
@@ -304,18 +314,44 @@ def render_branch_visualizations(df_source):
     
     with c_bar:
         st.markdown("##### ยอดขาย (กราฟแท่ง)")
-        fig_bar = px.bar(branch_summary, x='NAME', y='GRANDTOTAL', color='NAME', text='GRANDTOTAL', color_discrete_sequence=px.colors.qualitative.Set2)
+        fig_bar = px.bar(
+            branch_summary, 
+            x='NAME', 
+            y='GRANDTOTAL', 
+            color='NAME', 
+            text='GRANDTOTAL', 
+            color_discrete_map=branch_color_map
+        )
         fig_bar.update_traces(texttemplate='%{text:,.2f}', textposition='outside', cliponaxis=False)
-        fig_bar.update_layout(xaxis_title="", yaxis_title="ยอดขาย (บาท)", showlegend=False, height=400, margin=dict(l=20, r=20, t=30, b=20), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+        fig_bar.update_layout(
+            xaxis_title="", 
+            yaxis_title="ยอดขาย (บาท)", 
+            showlegend=False, 
+            height=400, 
+            margin=dict(l=20, r=20, t=30, b=20), 
+            plot_bgcolor='rgba(0,0,0,0)', 
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with c_donut:
         st.markdown("##### สัดส่วนยอดขาย (กราฟโดนัท)")
-        fig_donut = px.pie(branch_summary, values='GRANDTOTAL', names='NAME', hole=0.5, color_discrete_sequence=px.colors.qualitative.Set2)
+        fig_donut = px.pie(
+            branch_summary, 
+            values='GRANDTOTAL', 
+            names='NAME', 
+            color='NAME',
+            hole=0.5, 
+            color_discrete_map=branch_color_map
+        )
         fig_donut.update_traces(textinfo='percent+label', insidetextorientation='radial')
-        fig_donut.update_layout(showlegend=True, height=400, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor='rgba(0,0,0,0)')
+        fig_donut.update_layout(
+            showlegend=True, 
+            height=400, 
+            margin=dict(l=20, r=20, t=30, b=20), 
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
         st.plotly_chart(fig_donut, use_container_width=True)
-
 # ==========================================
 # 7. TABS NAVIGATION
 # ==========================================
