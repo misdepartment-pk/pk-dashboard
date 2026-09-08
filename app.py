@@ -292,9 +292,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ==========================================
 # 6. CHART DRAWING HELPER FUNCTIONS
 # ==========================================
-def render_branch_visualizations(df_source, title_label=""):
+def render_branch_visualizations(df_source):
     if df_source.empty:
-        st.info(f"ไม่พบข้อมูลยอดขายสำหรับ {title_label} (ภายใต้เงื่อนไขการกรองปัจจุบัน)")
+        st.info("ไม่พบข้อมูลยอดขาย (ภายใต้เงื่อนไขการกรองปัจจุบัน)")
         return
 
     branch_summary = df_source.groupby('NAME')['GRANDTOTAL'].sum().reset_index()
@@ -303,14 +303,14 @@ def render_branch_visualizations(df_source, title_label=""):
     c_bar, c_donut = st.columns([1.2, 1])
     
     with c_bar:
-        st.markdown(f"##### ยอดขาย (กราฟแท่ง) - {title_label}")
+        st.markdown("##### ยอดขาย (กราฟแท่ง)")
         fig_bar = px.bar(branch_summary, x='NAME', y='GRANDTOTAL', color='NAME', text='GRANDTOTAL', color_discrete_sequence=px.colors.qualitative.Set2)
         fig_bar.update_traces(texttemplate='%{text:,.2f}', textposition='outside', cliponaxis=False)
         fig_bar.update_layout(xaxis_title="", yaxis_title="ยอดขาย (บาท)", showlegend=False, height=400, margin=dict(l=20, r=20, t=30, b=20), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with c_donut:
-        st.markdown(f"##### สัดส่วนยอดขาย (กราฟโดนัท) - {title_label}")
+        st.markdown("##### สัดส่วนยอดขาย (กราฟโดนัท)")
         fig_donut = px.pie(branch_summary, values='GRANDTOTAL', names='NAME', hole=0.5, color_discrete_sequence=px.colors.qualitative.Set2)
         fig_donut.update_traces(textinfo='percent+label', insidetextorientation='radial')
         fig_donut.update_layout(showlegend=True, height=400, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor='rgba(0,0,0,0)')
