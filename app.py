@@ -190,7 +190,7 @@ if selected_months:
     target_month_nums = [month_map[m] for m in selected_months if m in month_map]
     df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.month.isin(target_month_nums)]
 
-# กรอง 4: วัน / ช่วงเวลาแบบด่วน (บวก 7 ชั่วโมง ป้องกัน Server Timezone เพี้ยน)
+# กรอง 4: วัน / ช่วงเวลาแบบด่วน (UTC+7 Thailand)
 if quick_time != "ดูข้อมูลทั้งหมด" and not df_filtered.empty:
     current_time_th = datetime.utcnow() + timedelta(hours=7)
     today_date = current_time_th.date()
@@ -270,7 +270,7 @@ tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs([
 ])
 
 with tab_branch:
-    # ดึงเฉพาะข้อมูลที่มาจากไฟล์ sales data.csv / sales_data.csv เท่านั้น
+    # ดึงเฉพาะข้อมูลที่มาจากไฟล์ sales data.csv / sales_data.csv
     if 'FILE_SOURCE' in df_filtered.columns:
         df_sales_data = df_filtered[
             df_filtered['FILE_SOURCE'].astype(str).str.lower().str.contains('sales data|sales_data', na=False)
@@ -293,7 +293,11 @@ with tab_trend:
 with tab_table:
     st.markdown("##### 📋 ตารางสรุปยอดขายตามสาขา")
     if not df_filtered.empty:
-        summary_table = df_filtered.groupby('NAME').agg(ยอดขายรวม=('GRANDTOTAL', 'sum'), จำนวนบิล=('ORDER_COUNT', 'sum')).reset_index()
+        summary_table = df_filtered.groupby('NAME').agg(
+            total_sales=('GRANDTOTAL', 'sum'),
+            bill_count=('ORDER_COUNT', 'sum')
+        ).reset_index()
+        summary_table.columns = ['NAME', 'ยอดขายรวม', 'จำนวนบิล']
         summary_table['เฉลี่ยต่อบิล'] = summary_table['ยอดขายรวม'] / summary_table['จำนวนบิล']
         summary_table = summary_table.sort_values(by='ยอดขายรวม', ascending=False)
         st.dataframe(summary_table.style.format({'ยอดขายรวม': '฿{:,.2f}', 'จำนวนบิล': '{:,.0f}', 'เฉลี่ยต่อบิล': '฿{:,.2f}'}), use_container_width=True)
@@ -305,7 +309,12 @@ with tab_bestseller:
     p_col = next((c for c in ['PDATA_NAME', 'PRODUCT_NAME', 'P_NAME', 'NAME_1', 'ชื่อสินค้า'] if c in df_filtered.columns), None)
     if p_col:
         qty_col = next((c for c in ['PDATA_QTY', 'QTY', 'AMOUNT_QTY', 'จำนวน'] if c in df_filtered.columns), 'ORDER_COUNT')
-        top_products = df_filtered.groupby(p_col).agg(ยอดขายรวม=('GRANDTOTAL', 'sum'), จำนวนที่ขาย=(qty_col, 'sum')).reset_index().sort_values(by='ยอดขายรวม', ascending=False).head(20)
+        top_products = df_filtered.groupby(p_col).agg(
+            total_sales=('GRANDTOTAL', 'sum'),
+            total_qty=(qty_col, 'sum')
+        ).reset_index()
+        top_products.columns = [p_col, 'ยอดขายรวม', 'จำนวนที่ขาย']
+        top_products = top_products.sort_values(by='ยอดขายรวม', ascending=False).head(20)
         st.dataframe(top_products.style.format({'ยอดขายรวม': '฿{:,.2f}', 'จำนวนที่ขาย': '{:,.0f}'}), use_container_width=True)
     else:
         st.info("ข้อมูลปัจจุบันไม่มีรายละเอียดชื่อสินค้า (แสดงยอดขายรวมระดับสาขาแล้ว)")
