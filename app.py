@@ -223,7 +223,7 @@ if not all_branches: all_branches = ["ศรีเมือง", "ทุ่ง�
 selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", options=all_branches, default=all_branches)
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Powered by peter pak: v.10.1.0")
+st.sidebar.caption("Powered by peter pak: v.10.2.0")
 
 # ==========================================
 # 4. FILTERING LOGIC FOR MAIN DASHBOARD
@@ -386,7 +386,7 @@ with tab_bestseller:
     if not df_product.empty:
         df_p_filtered = df_product.copy()
         
-        # Smart Branch Filtering (ไม่ตัดข้อมูลทิ้งถ้าไม่เจอสาขา)
+        # Smart Branch Filtering
         if selected_branches and df_p_filtered.get('HAS_BRANCH_COL', [False])[0]:
             matched_p = df_p_filtered[df_p_filtered['NAME'].isin(selected_branches)]
             if not matched_p.empty:
@@ -419,11 +419,10 @@ with tab_bestseller:
             if not matched_q.empty:
                 df_p_filtered = matched_q
 
-        # Auto-detect Product Column Name (ขยายรายการคอลัมน์)
+        # Auto-detect Product Column Name
         possible_p_cols = ['PDATA_NAME', 'PRODUCT_NAME', 'P_NAME', 'NAME_1', 'ชื่อสินค้า', 'PRODUCT', 'ITEM_NAME', 'DESCR', 'ITEMNAME', 'PROD_NAME', 'DESCRIPTION', 'TITLE', 'GOODS_NAME', 'สินค้า', 'รายการ', 'ชื่อรายการ', 'NAME_TH', 'NAME']
         p_col = next((c for c in possible_p_cols if c in df_p_filtered.columns and c != 'NAME' or (c == 'NAME' and not df_p_filtered.get('HAS_BRANCH_COL', [False])[0])), None)
 
-        # ถ้าหาคอลัมน์ชื่อสินค้าไม่เจอ จะแสดง Dropdown ให้ผู้ใช้ระบุเองได้
         if not p_col:
             st.warning("⚠️ ไม่พบชื่อคอลัมน์สินค้าอัตโนมัติ โปรดเลือกคอลัมน์ที่เป็น **ชื่อสินค้า** จากรายการด้านล่าง:")
             p_col = st.selectbox("เลือกคอลัมน์ชื่อสินค้า:", options=[c for c in df_p_filtered.columns if c not in ['GRANDTOTAL', 'QTY', 'Year_BE', 'Parsed_Date', 'HAS_BRANCH_COL']])
@@ -438,23 +437,52 @@ with tab_bestseller:
             top_products = top_products.sort_values(by='ยอดขายรวม', ascending=False).head(20)
             
             if not top_products.empty:
-                col_b1, col_b2 = st.columns([1, 1.2])
+                # ปรับสัดส่วนคอลัมน์ซ้าย (ฝั่งกราฟ) ให้กว้างขึ้นเป็น 1.3 ต่อ 1
+                col_b1, col_b2 = st.columns([1.3, 1])
                 with col_b1:
                     st.markdown("###### Top 10 สินค้าขายดีที่สุด (ยอดขาย)")
+                    
+                    df_top10 = top_products.head(10).sort_values(by='ยอดขายรวม', ascending=True)
+                    max_sales = df_top10['ยอดขายรวม'].max()
+                    
+                    # กำหนดสีแยกตามชื่อสินค้า และเลือกใช้พาเลทสีที่ดูง่าย
                     fig_pbar = px.bar(
-                        top_products.head(10).sort_values(by='ยอดขายรวม', ascending=True),
-                        y='ชื่อสินค้า', x='ยอดขายรวม', orientation='h', text='ยอดขายรวม',
-                        color_discrete_sequence=['#ef4444']
+                        df_top10,
+                        y='ชื่อสินค้า',
+                        x='ยอดขายรวม',
+                        orientation='h',
+                        text='ยอดขายรวม',
+                        color='ชื่อสินค้า',
+                        color_discrete_sequence=px.colors.qualitative.Bold
                     )
-                    fig_pbar.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
-                    fig_pbar.update_layout(xaxis_title="ยอดขาย (บาท)", yaxis_title="", height=420, margin=dict(l=20, r=20, t=20, b=20), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    
+                    fig_pbar.update_traces(
+                        texttemplate='฿%{text:,.2f}', 
+                        textposition='outside', 
+                        cliponaxis=False
+                    )
+                    
+                    # ปรับ layout เพิ่มระยะขอบขวา (r=90) และซ่อน legend เพื่อขยายพื้นที่กราฟ
+                    fig_pbar.update_layout(
+                        xaxis_title="ยอดขาย (บาท)", 
+                        yaxis_title="", 
+                        height=430, 
+                        margin=dict(l=10, r=90, t=20, b=20), 
+                        showlegend=False,
+                        plot_bgcolor='rgba(0,0,0,0)', 
+                        paper_bgcolor='rgba(0,0,0,0)'
+                    )
+                    
+                    # ขยายแกน X ฝั่งขวาเพิ่ม 22% เพื่อให้ตัวเลขมูลค่าแสดงผลได้ครบเต็มจำนวน ไม่โดนขอบตัด
+                    fig_pbar.update_xaxes(range=[0, max_sales * 1.22])
+                    
                     st.plotly_chart(fig_pbar, use_container_width=True)
 
                 with col_b2:
                     st.markdown("###### ตารางรายละเอียดสินค้าขายดี 20 อันดับแรก")
                     st.dataframe(
                         top_products.style.format({'ยอดขายรวม': '฿{:,.2f}', 'จำนวนที่ขาย': '{:,.0f}'}),
-                        use_container_width=True, height=420
+                        use_container_width=True, height=430
                     )
             else:
                 st.info("ไม่พบรายการสินค้าที่มียอดขายมากกว่า 0 บาท")
