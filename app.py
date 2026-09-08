@@ -331,7 +331,7 @@ with tab_branch:
     else:
         df_sales_data = df_filtered
         
-    render_branch_visualizations(df_sales_data, "ไฟล์ sales data")
+    render_branch_visualizations(df_sales_data)
 
 with tab_trend:
     st.markdown("##### 📈 เทรนด์ยอดขายรายวัน")
