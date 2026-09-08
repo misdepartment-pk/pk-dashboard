@@ -402,7 +402,7 @@ with tab_table:
         st.info("ไม่พบข้อมูลที่จะแสดงในตาราง")
 
 with tab_bestseller:
-    st.markdown("##### 🍜 รายงานสินค้าขายดี (คำนวณจากไฟล์ Product Data)")
+    st.markdown("##### 🍜 รายงานสินค้าขายดี")
     
     # 1. โหลดข้อมูลจากไฟล์ Product Data
     df_product = load_product_data_from_folder()
@@ -479,10 +479,10 @@ with tab_bestseller:
             top_products.columns = ['ชื่อสินค้า', 'ยอดขายรวม', 'จำนวนที่ขาย']
             top_products = top_products[top_products['ยอดขายรวม'] > 0]
             
-            # --- แก้ไข 1: เรียงลำดับตามจำนวนที่ขายจากมากไปน้อย ---
+            # เรียงลำดับตามจำนวนที่ขายจากมากไปน้อย
             top_products = top_products.sort_values(by='จำนวนที่ขาย', ascending=False).head(20).reset_index(drop=True)
             
-            # --- แก้ไข 2: เพิ่มคอลัมน์ลำดับ 1-20 ด้านหน้าสุด ---
+            # เพิ่มคอลัมน์ลำดับ 1-20 ด้านหน้าสุด
             top_products.insert(0, 'ลำดับ', range(1, len(top_products) + 1))
             
             if not top_products.empty:
@@ -490,7 +490,6 @@ with tab_bestseller:
                 with col_b1:
                     st.markdown("###### Top 10 สินค้าขายดีที่สุด (ยอดขาย)")
                     
-                    # จัดเรียงฝั่งกราฟตามยอดขาย Top 10
                     df_top10_chart = top_products.sort_values(by='ยอดขายรวม', ascending=True).tail(10)
                     max_sales = df_top10_chart['ยอดขายรวม'].max()
                     
@@ -526,7 +525,6 @@ with tab_bestseller:
                 with col_b2:
                     st.markdown("###### ตารางรายละเอียดสินค้าขายดี 20 อันดับแรก")
                     
-                    # --- แก้ไข 3: ใส่ hide_index=True เพื่อซ่อน Index ซ้ำซ้อนทางซ้าย ---
                     st.dataframe(
                         top_products.style.format({'ยอดขายรวม': '฿{:,.2f}', 'จำนวนที่ขาย': '{:,.0f}'}),
                         use_container_width=True, 
