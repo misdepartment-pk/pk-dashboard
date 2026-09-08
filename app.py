@@ -277,25 +277,26 @@ if quick_time != "ดูข้อมูลทั้งหมด" and not df_filt
 # ==========================================
 # 5. HEADER & TOP METRICS
 # ==========================================
-col_logo, col_space = st.columns([1, 4])
-with col_logo:
-    if os.path.exists("logo.png"):
-        st.image("logo.png", width=220)
-    else:
-        st.markdown("### 🍜 PK NOODLE SHOP")
+col_header, col_space = st.columns([2.5, 1.5])
+
+with col_header:
+    col_img, col_txt = st.columns([1, 4])
+    with col_img:
+        if os.path.exists("logo.png"):
+            st.image("logo.png", width=100)
+    with col_txt:
+        st.markdown(
+            """
+            <div style="display: flex; align-items: center; height: 100%; padding-top: 12px;">
+                <h2 style="color: #2b9e3e; font-weight: 800; font-size: 26px; margin: 0; line-height: 1.2;">
+                    PK NOODLE SHOP COMPANY LIMITED
+                </h2>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
 
 st.markdown('<div class="trick-banner">🧮 <b>ทริค:</b> เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)</div>', unsafe_allow_html=True)
-
-total_sales = df_filtered['GRANDTOTAL'].sum()
-total_bills = df_filtered['ORDER_COUNT'].sum()
-avg_bill = total_sales / total_bills if total_bills > 0 else 0
-
-m1, m2, m3 = st.columns(3)
-with m1: st.markdown(f'<div class="metric-card"><div class="metric-label">ยอดขายรวมทั้งหมด (บาท)</div><div class="metric-value">฿{total_sales:,.2f}</div></div>', unsafe_allow_html=True)
-with m2: st.markdown(f'<div class="metric-card"><div class="metric-label">จำนวนรายการ (บิล)</div><div class="metric-value">{int(total_bills):,}</div></div>', unsafe_allow_html=True)
-with m3: st.markdown(f'<div class="metric-card"><div class="metric-label">ยอดเฉลี่ยต่อบิล (บาท)</div><div class="metric-value">฿{avg_bill:,.2f}</div></div>', unsafe_allow_html=True)
-st.markdown("<br>", unsafe_allow_html=True)
-
 # ==========================================
 # 6. CHART DRAWING HELPER FUNCTIONS
 # ==========================================
