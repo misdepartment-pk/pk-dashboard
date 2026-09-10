@@ -85,7 +85,7 @@ def process_product_dataframe(df_p):
     df_p.columns = [str(c).upper().strip() for c in df_p.columns]
     df_p = df_p.loc[:, ~df_p.columns.duplicated()]
     
-    # วันที่ - เน้น CF_TRANDATE
+    # วันที่
     date_col = next((c for c in ['CF_TRANDATE', 'DOC_DATE', 'DOCDATE', 'TRANDATE', 'PSH_DATE', 'PDATA_DATE', 'DATE', 'DATETIME', 'TRAN_DATE', 'วันที่', 'TIME'] if c in df_p.columns), None)
     if date_col: df_p['Parsed_Date'] = df_p[date_col].apply(parse_thai_date)
     else: df_p['Parsed_Date'] = pd.NaT
@@ -96,17 +96,17 @@ def process_product_dataframe(df_p):
     if branch_col: df_p['BRANCH_NAME'] = df_p[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
     else: df_p['BRANCH_NAME'] = 'สาขาหลัก'
     
-    # จำนวน - เน้น QUANTITY
+    # จำนวน
     qty_col = next((c for c in ['QUANTITY', 'PDATA_QTY', 'QTY', 'AMOUNT_QTY', 'QTY_SOLD', 'TOTAL_QTY', 'SOLD_QTY', 'PD_QTY', 'จำนวน', 'จำนวนชิ้น', 'จำนวนขาย', 'ปริมาณ', 'COUNT'] if c in df_p.columns), None)
     if qty_col: df_p['QTY'] = pd.to_numeric(df_p[qty_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(1)
     else: df_p['QTY'] = 1.0
     
-    # ยอดขายรวมของสินค้าแต่ละรายการ - เน้น AMOUNT (ยอดขายสุทธิต่อแถว) ป้องกันการดึง GRANDTOTAL (ยอดรวมทั้งบิล)
+    # ยอดขายรวม
     sales_col = next((c for c in ['AMOUNT', 'NET_AMT', 'PDATA_NET_AMT', 'TOTAL', 'PRICE', 'TOTAL_PRICE', 'GRAND_TOTAL', 'GRANDTOTAL', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'ยอดขาย', 'ยอดรวม', 'จำนวนเงิน'] if c in df_p.columns), None)
     if sales_col: df_p['GRANDTOTAL'] = pd.to_numeric(df_p[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0.0)
     else: df_p['GRANDTOTAL'] = 0.0
     
-    # ชื่อสินค้า - เน้น ITEMNAME
+    # ชื่อสินค้า
     prod_col = next((c for c in ['ITEMNAME', 'PDATA_NAME', 'PRODUCT_NAME', 'NAME1', 'ITEM_NAME', 'GOODS_NAME', 'PD_NAME', 'DESCR', 'DESCRIPTION', 'ชื่อสินค้า', 'รายการ', 'สินค้า', 'NAME', 'TITLE', 'MENU'] if c in df_p.columns), None)
     if prod_col: df_p['PRODUCT_NAME'] = df_p[prod_col].astype(str).str.strip()
     else:
@@ -114,12 +114,12 @@ def process_product_dataframe(df_p):
         if str_cols: df_p['PRODUCT_NAME'] = df_p[str_cols[0]].astype(str).str.strip()
         else: df_p['PRODUCT_NAME'] = 'ไม่ระบุชื่อสินค้า'
         
-    # หน่วย - เน้น CF_UNITNAME
+    # หน่วย
     unit_col = next((c for c in ['CF_UNITNAME', 'UNIT_NAME', 'UTQ_NAME', 'UNIT', 'UM', 'หน่วย', 'หน่วยนับ'] if c in df_p.columns), None)
     if unit_col: df_p['UNIT'] = df_p[unit_col].astype(str).str.strip()
     else: df_p['UNIT'] = '-'
     
-    # เลขที่บิล - เน้น TRANNO
+    # เลขที่บิล
     bill_col = next((c for c in ['TRANNO', 'DOC_NO', 'DOCNO', 'BILL_NO', 'BILLNO', 'PSH_DOC_NO', 'PDATA_DOC_NO', 'เลขที่เอกสาร', 'เลขที่บิล', 'REF_NO', 'DI_REF'] if c in df_p.columns), None)
     if bill_col: df_p['BILL_NO'] = df_p[bill_col].astype(str).str.strip()
     else: df_p['BILL_NO'] = df_p.index.astype(str)
@@ -227,13 +227,12 @@ all_branches = sorted(df_all['NAME'].dropna().unique().tolist())
 if not all_branches: all_branches = ["ศรีเมือง", "ทุ่งปอ", "เจ้าพรหม", "บ้านไร่", "เทศบาล", "บ้านโป่ง"]
 selected_branches = st.sidebar.multiselect("เลือกสาขา:", options=all_branches, default=all_branches)
 st.sidebar.markdown("---")
-st.sidebar.caption("Powered by peter pak: v.10.2.5")
+st.sidebar.caption("Powered by peter pak: v.10.2.6")
 
 # ==========================================
 # 5. HEADER & DATE NAVIGATOR
 # ==========================================
-st.markdown("<h2 style='text-align: center; color: #0284c7; font-weight: 800; margin-bottom: 4px;'>ระบบแดชบอร์ดสรุปยอดขาย PK NOODLE SHOP</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #64748b; margin-top: 0px;'>อัปเดตข้อมูลล่าสุดอัตโนมัติจากไฟล์ที่อัปโหลด</p>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: #0284c7; font-weight: 800; margin-bottom: 20px;'>ระบบแดชบอร์ดสรุปยอดขาย PK NOODLE SHOP</h2>", unsafe_allow_html=True)
 
 st.markdown("<div style='background-color: #ffffff; padding: 12px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;'>", unsafe_allow_html=True)
 nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
@@ -358,28 +357,7 @@ with tab_table:
 with tab_bestseller:
     st.markdown("#### 🍜 รายงานสินค้าขายดี")
     
-    with st.expander("📂 อัปโหลด / เปลี่ยนไฟล์ข้อมูลสินค้า BPLUS (.csv หรือ .xlsx)"):
-        uploaded_pdata = st.file_uploader("เลือกไฟล์ข้อมูลสินค้า", type=['csv', 'xlsx'], label_visibility="collapsed")
-        
-    df_product = pd.DataFrame()
-    
-    if uploaded_pdata is not None:
-        if uploaded_pdata.name.lower().endswith('.csv'):
-            for enc in ['utf-8-sig', 'tis-620', 'cp874', 'utf-8']:
-                try:
-                    uploaded_pdata.seek(0)
-                    df_temp = pd.read_csv(uploaded_pdata, encoding=enc, low_memory=False)
-                    df_product = process_product_dataframe(df_temp)
-                    break
-                except: pass
-        else:
-            try:
-                uploaded_pdata.seek(0)
-                df_temp = pd.read_excel(uploaded_pdata)
-                df_product = process_product_dataframe(df_temp)
-            except: pass
-    else:
-        df_product = load_product_data()
+    df_product = load_product_data()
         
     if not df_product.empty:
         df_p_filtered = df_product.copy()
@@ -435,7 +413,7 @@ with tab_bestseller:
                 'BILL_NO': 'บิลที่มีสินค้านี้'
             }, inplace=True)
             
-            # เรียงลำดับจากมากไปน้อยตามจำนวนที่ขาย
+            # เรียงลำดับตามจำนวนที่ขาย
             summary_df = summary_df.sort_values(by='จำนวนที่ขาย', ascending=False).reset_index(drop=True)
             summary_df.index = summary_df.index + 1
             summary_df = summary_df.reset_index().rename(columns={'index': 'ลำดับ'})
@@ -445,6 +423,7 @@ with tab_bestseller:
             with c1:
                 st.markdown("##### Top 10 สินค้าขายดีที่สุด (ตามจำนวน)")
                 top10_df = summary_df.head(10).copy()
+                top10_df['Qty_Label'] = top10_df.apply(lambda r: f"{r['จำนวนที่ขาย']:,.0f}", axis=1)
                 
                 bar_colors = px.colors.qualitative.Bold[:10]
                 if len(bar_colors) < len(top10_df):
@@ -455,12 +434,11 @@ with tab_bestseller:
                     x='จำนวนที่ขาย', 
                     y='ชื่อสินค้า', 
                     orientation='h',
-                    text='จำนวนที่ขาย',
+                    text='Qty_Label',
                     color='ชื่อสินค้า',
                     color_discrete_sequence=bar_colors
                 )
                 fig_prod.update_traces(
-                    texttemplate='%{text:,.0f}', 
                     textposition='outside', 
                     showlegend=False
                 )
@@ -468,12 +446,12 @@ with tab_bestseller:
                     xaxis_title="จำนวนที่ขาย", 
                     yaxis_title="",
                     height=520,
-                    margin=dict(l=10, r=45, t=10, b=10),
+                    margin=dict(l=10, r=65, t=10, b=10),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)'
                 )
                 fig_prod.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#f0f0f0')
-                fig_prod.update_yaxes(showgrid=False)
+                fig_prod.update_yaxes(showgrid=False, autorange="reversed")
                 st.plotly_chart(fig_prod, use_container_width=True)
                 
             with c2:
@@ -491,4 +469,4 @@ with tab_bestseller:
         else:
             st.info("ไม่พบข้อมูลสินค้าที่ตรงกับเงื่อนไขการกรอง")
     else:
-        st.info("ไม่พบข้อมูลสินค้า (Product Data) ในระบบ โปรดอัปโหลดไฟล์ในหัวข้อด้านบน")
+        st.info("ไม่พบข้อมูลสินค้าในระบบ โปรดตรวจสอบว่ามีไฟล์ข้อมูลสินค้าอยู่ในโฟลเดอร์ระบบแล้ว")
