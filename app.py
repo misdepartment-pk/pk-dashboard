@@ -10,9 +10,6 @@ from datetime import datetime, timedelta
 # ==========================================
 # 1. PAGE CONFIG & CUSTOM CSS
 # ==========================================
-# ==========================================
-# 1. PAGE CONFIG & CUSTOM CSS
-# ==========================================
 st.set_page_config(
     page_title="PK NOODLE SHOP Dashboard",
     page_icon="logo.png" if os.path.exists("logo.png") else "🍜",
@@ -277,19 +274,21 @@ if quick_time != "ดูข้อมูลทั้งหมด" and not df_filt
 # ==========================================
 # 5. HEADER & TOP METRICS
 # ==========================================
-col_header, col_space = st.columns([2.5, 1.5])
+# ปรับสัดส่วนคอลัมน์ [5, 1] เพื่อขยายพื้นที่ฝั่งซ้ายไม่ให้ตัวอักษรตกบรรทัด
+col_header, col_space = st.columns([5, 1])
 
 with col_header:
-    col_img, col_txt = st.columns([1, 4])
+    col_img, col_txt = st.columns([1, 8])
     with col_img:
         if os.path.exists("logo.png"):
             st.image("logo.png", width=100)
     with col_txt:
         st.markdown(
             """
-            <div style="display: flex; align-items: center; height: 100%; padding-top: 12px;">
-                <h2 style="color: #2b9e3e; font-weight: 800; font-size: 26px; margin: 0; line-height: 1.2;">
-                    PK NOODLE SHOP COMPANY LIMITED <span style="color: red;">(Senior Soft- 5 สิงหาคม 2569)</span>
+            <div style="display: flex; align-items: center; height: 100%; padding-top: 15px; white-space: nowrap;">
+                <h2 style="margin: 0; line-height: 1.2; font-size: 26px;">
+                    <span style="color: #2b9e3e; font-weight: 800;">PK NOODLE SHOP COMPANY LIMITED </span>
+                    <span style="color: red; font-weight: bold;">(Senior Soft- >>เริ่ม 5 สิงหาคม 2569)</span>
                 </h2>
             </div>
             """, 
@@ -299,14 +298,12 @@ with col_header:
 st.markdown('<div class="trick-banner">🧮 <b>ทริค:</b> เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)</div>', unsafe_allow_html=True)
 
 # ------------------------------------------
-# ส่วนเพิ่มใหม่: แสดงตัวชี้วัด (Metrics) 3 รายการ
+# แสดงตัวชี้วัด (Metrics) 3 รายการ
 # ------------------------------------------
-# คำนวณยอดจากข้อมูลที่ผ่านการกรอง (df_filtered)
 total_sales = df_filtered['GRANDTOTAL'].sum()
-total_bills = len(df_filtered) # นับจากจำนวนแถว (บรรทัด)
+total_bills = len(df_filtered)
 avg_per_bill = total_sales / total_bills if total_bills > 0 else 0
 
-# วาดการ์ด 3 คอลัมน์ โดยเรียกใช้ Class CSS ของคุณ
 m1, m2, m3 = st.columns(3)
 
 with m1:
@@ -333,56 +330,18 @@ with m3:
         </div>
     ''', unsafe_allow_html=True)
 
-# เว้นช่องว่างเล็กน้อยก่อนแสดงเนื้อหา Tabs (Section 7)
 st.markdown("<br>", unsafe_allow_html=True)
-# ------------------------------------------
-# ส่วนเพิ่มใหม่: แสดงตัวชี้วัด (Metrics) 3 รายการ
-# ------------------------------------------
-# คำนวณยอดจากข้อมูลที่ผ่านการกรอง (df_filtered)
-total_sales = df_filtered['GRANDTOTAL'].sum()
-total_bills = len(df_filtered) # นับจากจำนวนแถว (บรรทัด)
-avg_per_bill = total_sales / total_bills if total_bills > 0 else 0
 
-# วาดการ์ด 3 คอลัมน์ โดยเรียกใช้ Class CSS ของคุณ
-m1, m2, m3 = st.columns(3)
-
-with m1:
-    st.markdown(f'''
-        <div class="metric-card">
-            <div class="metric-label">ยอดขายรวมทั้งหมด (บาท)</div>
-            <div class="metric-value">฿{total_sales:,.2f}</div>
-        </div>
-    ''', unsafe_allow_html=True)
-
-with m2:
-    st.markdown(f'''
-        <div class="metric-card">
-            <div class="metric-label">จำนวนบิล (นับจากจำนวนบรรทัด)</div>
-            <div class="metric-value">{total_bills:,}</div>
-        </div>
-    ''', unsafe_allow_html=True)
-
-with m3:
-    st.markdown(f'''
-        <div class="metric-card">
-            <div class="metric-label">ยอดเฉลี่ยต่อบิล (บาท)</div>
-            <div class="metric-value">฿{avg_per_bill:,.2f}</div>
-        </div>
-    ''', unsafe_allow_html=True)
-
-# เว้นช่องว่างเล็กน้อยก่อนแสดงเนื้อหา Tabs (Section 7)
-st.markdown("<br>", unsafe_allow_html=True)
 # ==========================================
 # 6. CHART DRAWING HELPER FUNCTIONS
 # ==========================================
-# กำหนดสีประจำสาขา
 branch_color_map = {
-    'ศรีเมือง': '#EF4444',  # สีแดง
-    'ทุ่งปอ': '#3B82F6',   # สีฟ้า
-    'เจ้าพรหม': '#A855F7',  # สีม่วง
-    'บ้านไร่': '#10B981',   # สีเขียว
-    'เทศบาล': '#EAB308',  # สีเหลือง
-    'บ้านโป่ง': '#EC4899'   # สีชมพู
+    'ศรีเมือง': '#EF4444',  
+    'ทุ่งปอ': '#3B82F6',   
+    'เจ้าพรหม': '#A855F7',  
+    'บ้านไร่': '#10B981',   
+    'เทศบาล': '#EAB308',  
+    'บ้านโป่ง': '#EC4899'   
 }
 
 def render_branch_visualizations(df_source):
@@ -435,6 +394,7 @@ def render_branch_visualizations(df_source):
             paper_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig_donut, use_container_width=True)
+
 # ==========================================
 # 7. TABS NAVIGATION
 # ==========================================
@@ -479,10 +439,8 @@ with tab_table:
 with tab_bestseller:
     st.markdown("##### 🍜 รายงานสินค้าขายดี")
     
-    # 1. โหลดข้อมูลจากไฟล์ Product Data
     df_product = load_product_data_from_folder()
     
-    # 2. ตัวเลือกการอัปโหลดไฟล์ตรงจากหน้าเว็บ
     if df_product.empty:
         st.info("💡 หากไม่พบไฟล์ในโฟลเดอร์ สามารถเลือกอัปโหลดไฟล์ Product Data เพื่อประมวลผลทันทีได้ครับ")
         uploaded_pfile = st.file_uploader(
@@ -501,23 +459,19 @@ with tab_bestseller:
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
 
-    # 3. ประมวลผลเมื่อมีข้อมูล
     if not df_product.empty:
         df_p_filtered = df_product.copy()
         
-        # Smart Branch Filtering
         if selected_branches and df_p_filtered.get('HAS_BRANCH_COL', [False])[0]:
             matched_p = df_p_filtered[df_p_filtered['NAME'].isin(selected_branches)]
             if not matched_p.empty:
                 df_p_filtered = matched_p
         
-        # Smart Year Filtering
         if selected_years and 'Year_BE' in df_p_filtered.columns and not df_p_filtered['Year_BE'].isna().all():
             matched_y = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
             if not matched_y.empty:
                 df_p_filtered = matched_y
 
-        # Smart Quick Time Filtering
         if quick_time != "ดูข้อมูลทั้งหมด" and 'Parsed_Date' in df_p_filtered.columns and not df_p_filtered['Parsed_Date'].isna().all():
             current_time_th = datetime.utcnow() + timedelta(hours=7)
             today_date = current_time_th.date()
@@ -538,7 +492,6 @@ with tab_bestseller:
             if not matched_q.empty:
                 df_p_filtered = matched_q
 
-        # Auto-detect Product Column Name
         possible_p_cols = ['PDATA_NAME', 'PRODUCT_NAME', 'P_NAME', 'NAME_1', 'ชื่อสินค้า', 'PRODUCT', 'ITEM_NAME', 'DESCR', 'ITEMNAME', 'PROD_NAME', 'DESCRIPTION', 'TITLE', 'GOODS_NAME', 'สินค้า', 'รายการ', 'ชื่อรายการ', 'NAME_TH', 'NAME']
         p_col = next((c for c in possible_p_cols if c in df_p_filtered.columns and c != 'NAME' or (c == 'NAME' and not df_p_filtered.get('HAS_BRANCH_COL', [False])[0])), None)
 
@@ -554,10 +507,7 @@ with tab_bestseller:
             top_products.columns = ['ชื่อสินค้า', 'ยอดขายรวม', 'จำนวนที่ขาย']
             top_products = top_products[top_products['ยอดขายรวม'] > 0]
             
-            # เรียงลำดับตามจำนวนที่ขายจากมากไปน้อย
             top_products = top_products.sort_values(by='จำนวนที่ขาย', ascending=False).head(20).reset_index(drop=True)
-            
-            # เพิ่มคอลัมน์ลำดับ 1-20 ด้านหน้าสุด
             top_products.insert(0, 'ลำดับ', range(1, len(top_products) + 1))
             
             if not top_products.empty:
