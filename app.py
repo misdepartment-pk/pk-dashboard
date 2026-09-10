@@ -52,12 +52,14 @@ st.markdown("""
         background-color: #ffffff; border-bottom: 3px solid #ef4444 !important;
         color: #ef4444 !important;
     }
-    /* แต่ง Date Navigator */
+    /* แต่ง Date Navigator ให้ตัวใหญ่และอยู่กึ่งกลาง */
     div[data-testid="stDateInput"] input {
-        text-align: center;
-        color: #0284c7;
-        font-weight: 700;
-        font-size: 16px;
+        text-align: center !important;
+        color: #0284c7 !important;
+        font-weight: 800 !important;
+        font-size: 26px !important;
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
     }
 </style>
 """, unsafe_allow_html=True)
