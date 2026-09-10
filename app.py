@@ -149,15 +149,18 @@ def load_product_data():
     if not dfs: return pd.DataFrame()
     df_p = pd.concat(dfs, ignore_index=True)
     
+    # Date
     date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_DATE'] if c in df_p.columns), None)
     if date_col: df_p['Parsed_Date'] = df_p[date_col].apply(parse_thai_date)
     else: df_p['Parsed_Date'] = pd.NaT
     df_p['Year_BE'] = df_p['Parsed_Date'].dt.year + 543
     
+    # Branch
     branch_col = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'NAME', 'PSH_BR_NAME', 'สาขา'] if c in df_p.columns), None)
     if branch_col: df_p['BRANCH_NAME'] = df_p[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
     else: df_p['BRANCH_NAME'] = 'สาขาหลัก'
     
+    # Qty & Amount
     qty_col = next((c for c in ['PDATA_QTY', 'QTY', 'AMOUNT_QTY', 'จำนวน', 'QUANTITY'] if c in df_p.columns), None)
     if qty_col: df_p['QTY'] = pd.to_numeric(df_p[qty_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(1)
     else: df_p['QTY'] = 1
@@ -166,6 +169,7 @@ def load_product_data():
     if sales_col: df_p['GRANDTOTAL'] = pd.to_numeric(df_p[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0)
     else: df_p['GRANDTOTAL'] = 0.0
     
+    # Product Name
     prod_col = next((c for c in ['PDATA_NAME', 'NAME1', 'PRODUCT_NAME', 'ITEM_NAME', 'ชื่อสินค้า', 'DESCR', 'GOODS_NAME'] if c in df_p.columns), None)
     if prod_col: df_p['PRODUCT_NAME'] = df_p[prod_col].astype(str).strip()
     else: df_p['PRODUCT_NAME'] = 'ไม่ระบุชื่อสินค้า'
@@ -209,38 +213,31 @@ if not all_branches: all_branches = ["ศรีเมือง", "ทุ่ง�
 selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", options=all_branches, default=all_branches)
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Powered by peter pak: v.10.2.3")
+st.sidebar.caption("Powered by peter pak: v.10.2.0")
 
 # ==========================================
-# 5. DATA FILTERING
+# 5. FILTERING LOGIC (SALES)
 # ==========================================
 df_filtered = df_all.copy()
+current_time_th = datetime.utcnow() + timedelta(hours=7)
+today_date = current_time_th.date()
 
-if selected_years:
-    df_filtered = df_filtered[df_filtered['Year_BE'].isin(selected_years)]
-else:
-    df_filtered = df_filtered.iloc[0:0]
+if selected_years: df_filtered = df_filtered[df_filtered['Year_BE'].isin(selected_years)]
+else: df_filtered = df_filtered.iloc[0:0]
 
-if selected_branches:
-    df_filtered = df_filtered[df_filtered['NAME'].isin(selected_branches)]
-else:
-    df_filtered = df_filtered.iloc[0:0]
+if selected_branches: df_filtered = df_filtered[df_filtered['NAME'].isin(selected_branches)]
+else: df_filtered = df_filtered.iloc[0:0]
 
 if selected_months:
     month_map = {m: i+1 for i, m in enumerate(month_names)}
     target_month_nums = [month_map[m] for m in selected_months if m in month_map]
     df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.month.isin(target_month_nums)]
 
-today_date = current_time_th.date()
-df_prev = pd.DataFrame()
-
 if quick_time != "ดูข้อมูลทั้งหมด" and not df_filtered.empty:
     if quick_time == "ใช้วันที่จาก Date Navigator":
         df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
-        df_prev = df_all[(df_all['Parsed_Date'].dt.date == (st.session_state.nav_date - timedelta(days=1))) & (df_all['NAME'].isin(selected_branches))]
     elif quick_time == "วันนี้":
         df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.date == today_date]
-        df_prev = df_all[(df_all['Parsed_Date'].dt.date == (today_date - timedelta(days=1))) & (df_all['NAME'].isin(selected_branches))]
     elif quick_time == "เมื่อวาน":
         df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.date == (today_date - timedelta(days=1))]
     elif quick_time == "7 วันล่าสุด":
@@ -253,111 +250,111 @@ if quick_time != "ดูข้อมูลทั้งหมด" and not df_filt
         df_filtered = df_filtered[(df_filtered['Parsed_Date'].dt.date >= start_date) & (df_filtered['Parsed_Date'].dt.date <= end_date)]
 
 # ==========================================
-# 6. MAIN CONTENT UI
+# 6. HEADER & DATE NAVIGATOR
 # ==========================================
-st.markdown("<h2 style='text-align: center; color: #0284c7; font-weight: 800; margin-bottom: 0px;'>ระบบแดชบอร์ดสรุปยอดขาย PK NOODLE SHOP</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #64748b; margin-top: 0px;'>อัปเดตข้อมูลล่าสุดอัตโนมัติจากไฟล์ที่อัปโหลด</p>", unsafe_allow_html=True)
+col_header, col_space = st.columns([5, 1])
+with col_header:
+    col_img, col_txt = st.columns([1, 8])
+    with col_img:
+        if os.path.exists("logo.png"): st.image("logo.png", width=100)
+    with col_txt:
+        st.markdown(
+            """
+            <div style="display: flex; align-items: center; height: 100%; padding-top: 15px; white-space: nowrap;">
+                <h2 style="margin: 0; line-height: 1.2; font-size: 26px;">
+                    <span style="color: #2b9e3e; font-weight: 800;">PK NOODLE SHOP COMPANY LIMITED </span>
+                    <span style="color: red; font-weight: bold;">(Senior Soft- >>เริ่ม 5 สิงหาคม 2569)</span>
+                </h2>
+            </div>
+            """, unsafe_allow_html=True
+        )
 
-if quick_time == "ใช้วันที่จาก Date Navigator":
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col1: st.button("❮ วันก่อนหน้า", on_click=go_prev, use_container_width=True)
-    with col2:
-        st.session_state.nav_date = st.date_input("เลือกวันที่", value=st.session_state.nav_date, label_visibility="collapsed")
-    with col3: st.button("วันถัดไป ❯", on_click=go_next, use_container_width=True)
+st.markdown('<div class="trick-banner">🧮 <b>ทริค:</b> เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)</div>', unsafe_allow_html=True)
 
-# ----------------- Metrics -----------------
-total_sales = df_filtered['GRANDTOTAL'].sum() if not df_filtered.empty else 0
-total_bills = df_filtered['ORDER_COUNT'].sum() if not df_filtered.empty else 0
-avg_bill = total_sales / total_bills if total_bills > 0 else 0
-
-delta_sales_html = ""
-if quick_time in ["ใช้วันที่จาก Date Navigator", "วันนี้"] and not df_prev.empty:
-    prev_sales = df_prev['GRANDTOTAL'].sum()
-    if prev_sales > 0:
-        diff_pct = ((total_sales - prev_sales) / prev_sales) * 100
-        color = "#10b981" if diff_pct >= 0 else "#ef4444"
-        arrow = "▲" if diff_pct >= 0 else "▼"
-        delta_sales_html = f"<div style='color: {color}; font-size: 14px; font-weight: 600; margin-top: 4px;'>{arrow} {diff_pct:.1f}% เทียบกับวันก่อนหน้า</div>"
-    else:
-        delta_sales_html = f"<div style='color: #64748b; font-size: 14px; margin-top: 4px;'>ไม่มียอดของวันก่อนหน้า</div>"
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.markdown(f"<div class='metric-card'><div class='metric-label'>ยอดขายรวมทั้งหมด (บาท)</div><div class='metric-value'>฿{total_sales:,.2f}</div>{delta_sales_html}</div>", unsafe_allow_html=True)
-with col2:
-    st.markdown(f"<div class='metric-card'><div class='metric-label'>จำนวนบิล (นับจากจำนวนบรรทัด)</div><div class='metric-value'>{total_bills:,.0f}</div></div>", unsafe_allow_html=True)
-with col3:
-    st.markdown(f"<div class='metric-card'><div class='metric-label'>ยอดเฉลี่ยต่อบิล (บาท)</div><div class='metric-value'>฿{avg_bill:,.2f}</div></div>", unsafe_allow_html=True)
-
+nav_l, nav_m, nav_r = st.columns([1, 5, 1])
+with nav_l: st.button("❮ วันก่อนหน้า", on_click=go_prev, use_container_width=True)
+with nav_m: st.date_input("เลือกวันที่", key="nav_date", label_visibility="collapsed", format="DD/MM/YYYY")
+with nav_r: st.button("วันถัดไป ❯", on_click=go_next, use_container_width=True)
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ----------------- Tabs -----------------
-tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
+# ==========================================
+# 7. METRICS 
+# ==========================================
+total_sales = df_filtered['GRANDTOTAL'].sum()
+total_bills = len(df_filtered)
+avg_per_bill = total_sales / total_bills if total_bills > 0 else 0
+
+m1, m2, m3 = st.columns(3)
+with m1:
+    st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">ยอดขายรวมทั้งหมด (บาท)</div>
+            <div class="metric-value">฿{total_sales:,.2f}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with m2:
+    st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">จำนวนบิล (นับจากจำนวนบรรทัด)</div>
+            <div class="metric-value">{total_bills:,}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with m3:
+    st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">ยอดเฉลี่ยต่อบิล (บาท)</div>
+            <div class="metric-value">฿{avg_per_bill:,.2f}</div>
+        </div>
+    """, unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. TAB CONTENT
+# 8. VISUALIZATIONS & TABS
 # ==========================================
+branch_color_map = {
+    'ศรีเมือง': '#EF4444', 'ทุ่งปอ': '#3B82F6', 'เจ้าพรหม': '#A855F7',  
+    'บ้านไร่': '#10B981', 'เทศบาล': '#EAB308', 'บ้านโป่ง': '#EC4899'   
+}
 
-# --- TAB 1: ยอดรวมสาขา ---
+tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs([
+    "🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"
+])
+
 with tab_branch:
-    if not df_filtered.empty:
-        branch_sales = df_filtered.groupby('NAME').agg(Total_Sales=('GRANDTOTAL', 'sum'), Total_Bills=('ORDER_COUNT', 'sum')).reset_index()
-        branch_sales = branch_sales.sort_values(by='Total_Sales', ascending=False)
-        branch_sales['Avg_Bill'] = np.where(branch_sales['Total_Bills'] > 0, branch_sales['Total_Sales'] / branch_sales['Total_Bills'], 0)
-        
-        c1, c2 = st.columns([6, 4])
-        with c1:
-            st.markdown("##### 🏆 จัดอันดับยอดขายแต่ละสาขา")
-            fig_bar = px.bar(branch_sales.sort_values(by='Total_Sales', ascending=True), 
-                             x='Total_Sales', y='NAME', orientation='h', 
-                             text='Total_Sales', color='Total_Sales', color_continuous_scale='Blues')
-            fig_bar.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
-            fig_bar.update_layout(xaxis_title="ยอดขาย (บาท)", yaxis_title="", showlegend=False, height=350, margin=dict(l=10, r=50, t=10, b=10))
+    if df_filtered.empty:
+        st.info("ไม่พบข้อมูลยอดขาย (ภายใต้เงื่อนไขการกรองปัจจุบัน)")
+    else:
+        branch_summary = df_filtered.groupby('NAME')['GRANDTOTAL'].sum().reset_index().sort_values(by='GRANDTOTAL', ascending=False)
+        c_bar, c_donut = st.columns([1.2, 1])
+        with c_bar:
+            st.markdown("##### ยอดขาย (กราฟแท่ง)")
+            fig_bar = px.bar(branch_summary, x='NAME', y='GRANDTOTAL', color='NAME', text='GRANDTOTAL', color_discrete_map=branch_color_map)
+            fig_bar.update_traces(texttemplate='%{text:,.2f}', textposition='outside', cliponaxis=False)
+            fig_bar.update_layout(xaxis_title="", yaxis_title="ยอดขาย (บาท)", showlegend=False, height=400, margin=dict(l=20, r=20, t=30, b=20), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_bar, use_container_width=True)
-            
-        with c2:
-            st.markdown("##### 🍰 สัดส่วนยอดขาย")
-            fig_pie = px.pie(branch_sales, values='Total_Sales', names='NAME', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_pie.update_traces(textinfo='percent+label', textposition='inside')
-            fig_pie.update_layout(height=350, margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
-            st.plotly_chart(fig_pie, use_container_width=True)
-    else:
-        st.info("ไม่พบข้อมูลสำหรับช่วงเวลาหรือสาขาที่เลือก")
+        with c_donut:
+            st.markdown("##### สัดส่วนยอดขาย (กราฟโดนัท)")
+            fig_donut = px.pie(branch_summary, values='GRANDTOTAL', names='NAME', color='NAME', hole=0.5, color_discrete_map=branch_color_map)
+            fig_donut.update_traces(textinfo='percent+label', insidetextorientation='radial')
+            fig_donut.update_layout(showlegend=True, height=400, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig_donut, use_container_width=True)
 
-# --- TAB 2: เทรนด์รายวัน ---
 with tab_trend:
+    st.markdown("##### 📈 เทรนด์ยอดขายรายวัน")
     if not df_filtered.empty and not df_filtered['Parsed_Date'].isna().all():
-        daily_sales = df_filtered.groupby(df_filtered['Parsed_Date'].dt.date).agg(Total_Sales=('GRANDTOTAL', 'sum')).reset_index()
-        daily_sales.rename(columns={'Parsed_Date': 'Date'}, inplace=True)
-        daily_sales = daily_sales.sort_values('Date')
-        
-        if len(daily_sales) > 1:
-            st.markdown("##### 📈 แนวโน้มยอดขายรายวัน")
-            fig_line = px.line(daily_sales, x='Date', y='Total_Sales', markers=True)
-            fig_line.update_traces(line_color='#0ea5e9', marker=dict(size=8, color='#0284c7'))
-            fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)", height=400, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig_line, use_container_width=True)
-        else:
-            st.info("มีข้อมูลเพียง 1 วัน ไม่สามารถสร้างกราฟแนวโน้มได้ (ลองเปลี่ยนช่วงเวลา)")
+        daily_trend = df_filtered.groupby(df_filtered['Parsed_Date'].dt.date)['GRANDTOTAL'].sum().reset_index()
+        fig_trend = px.line(daily_trend, x='Parsed_Date', y='GRANDTOTAL', markers=True, title="แนวโน้มยอดขายรายวัน")
+        st.plotly_chart(fig_trend, use_container_width=True)
     else:
-        st.info("ไม่มีข้อมูลวันที่ที่สามารถสร้างกราฟได้")
+        st.info("ไม่มีข้อมูลเพียงพอสำหรับสร้างกราฟเทรนด์")
 
-# --- TAB 3: ตารางตัวเลข ---
 with tab_table:
-    if not df_filtered.empty:
-        st.markdown("##### 📋 ข้อมูลดิบ (ตามช่วงเวลาที่กรอง)")
-        display_df = df_filtered[['Parsed_Date', 'NAME', 'GRANDTOTAL', 'ORDER_COUNT']].copy()
-        if not display_df['Parsed_Date'].isna().all():
-            display_df['Parsed_Date'] = display_df['Parsed_Date'].dt.strftime('%d/%m/%Y')
-        display_df.rename(columns={'Parsed_Date': 'วันที่', 'NAME': 'สาขา', 'GRANDTOTAL': 'ยอดขายรวม', 'ORDER_COUNT': 'จำนวนบิล'}, inplace=True)
-        st.dataframe(display_df, use_container_width=True)
-        
-        csv = display_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 ดาวน์โหลดข้อมูลเป็น CSV", csv, "sales_data.csv", "text/csv", use_container_width=True)
-    else:
-        st.info("ไม่พบข้อมูล")
+    st.markdown("##### 📋 ตารางข้อมูลดิบ (ตามตัวกรอง)")
+    st.dataframe(df_filtered, use_container_width=True)
 
-# --- TAB 4: สินค้าขายดี (BEST SELLER) ---
+# ===== 9. BEST SELLER TAB LOGIC =====
 with tab_bestseller:
     st.markdown("##### 🍜 ข้อมูลสินค้าขายดี")
     df_product = load_product_data()
@@ -365,25 +362,18 @@ with tab_bestseller:
     if not df_product.empty:
         df_p_filtered = df_product.copy()
         
-        # 1. กรองปี
-        if selected_years: 
-            df_p_filtered = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
-        else: 
-            df_p_filtered = df_p_filtered.iloc[0:0]
+        # Apply the exact same filters as sales data
+        if selected_years: df_p_filtered = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
+        else: df_p_filtered = df_p_filtered.iloc[0:0]
         
-        # 2. กรองสาขา
-        if selected_branches: 
-            df_p_filtered = df_p_filtered[df_p_filtered['BRANCH_NAME'].isin(selected_branches)]
-        else: 
-            df_p_filtered = df_p_filtered.iloc[0:0]
+        if selected_branches: df_p_filtered = df_p_filtered[df_p_filtered['BRANCH_NAME'].isin(selected_branches)]
+        else: df_p_filtered = df_p_filtered.iloc[0:0]
             
-        # 3. กรองเดือน
         if selected_months:
             month_map_p = {m: i+1 for i, m in enumerate(month_names)}
             target_month_nums_p = [month_map_p[m] for m in selected_months if m in month_map_p]
             df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.month.isin(target_month_nums_p)]
 
-        # 4. กรองช่วงเวลาด่วน (Quick Time)
         if quick_time != "ดูข้อมูลทั้งหมด" and not df_p_filtered.empty:
             if quick_time == "ใช้วันที่จาก Date Navigator":
                 df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
@@ -401,38 +391,10 @@ with tab_bestseller:
                 df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.date >= start_date) & (df_p_filtered['Parsed_Date'].dt.date <= end_date)]
 
         if not df_p_filtered.empty:
-            # คำนวณสรุปข้อมูล
-            top_sales = df_p_filtered.groupby('PRODUCT_NAME')['GRANDTOTAL'].sum().reset_index().sort_values(by='GRANDTOTAL', ascending=False).head(10)
-            top_qty = df_p_filtered.groupby('PRODUCT_NAME')['QTY'].sum().reset_index().sort_values(by='QTY', ascending=False).head(10)
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("###### 🏆 10 อันดับสินค้า (ยอดขายสูงสุด)")
-                fig_prod_sales = px.bar(top_sales.sort_values(by='GRANDTOTAL', ascending=True), 
-                                        x='GRANDTOTAL', y='PRODUCT_NAME', orientation='h',
-                                        text='GRANDTOTAL', color='GRANDTOTAL', color_continuous_scale='Blues')
-                fig_prod_sales.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
-                fig_prod_sales.update_layout(xaxis_title="ยอดขาย (บาท)", yaxis_title="", showlegend=False, height=400, margin=dict(l=10, r=50, t=10, b=10))
-                st.plotly_chart(fig_prod_sales, use_container_width=True)
-                
-            with c2:
-                st.markdown("###### 📦 10 อันดับสินค้า (จำนวนชิ้นสูงสุด)")
-                fig_prod_qty = px.bar(top_qty.sort_values(by='QTY', ascending=True), 
-                                      x='QTY', y='PRODUCT_NAME', orientation='h',
-                                      text='QTY', color='QTY', color_continuous_scale='Greens')
-                fig_prod_qty.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-                fig_prod_qty.update_layout(xaxis_title="จำนวน (ชิ้น)", yaxis_title="", showlegend=False, height=400, margin=dict(l=10, r=40, t=10, b=10))
-                st.plotly_chart(fig_prod_qty, use_container_width=True)
-                
-            st.markdown("###### 📋 ตารางรายละเอียดสินค้าทั้งหมด")
-            summary_df = df_p_filtered.groupby('PRODUCT_NAME').agg(
-                จำนวน_ชิ้น=('QTY', 'sum'), 
-                ยอดขายรวม=('GRANDTOTAL', 'sum')
-            ).reset_index().sort_values(by='ยอดขายรวม', ascending=False)
-            
-            # ปรับแต่งรูปแบบตัวเลขในตาราง
-            st.dataframe(summary_df.style.format({'จำนวน_ชิ้น': '{:,.0f}', 'ยอดขายรวม': '{:,.2f}'}), use_container_width=True)
-        else:
-            st.warning("ไม่พบข้อมูลสินค้าขายดี ภายใต้เงื่อนไขที่คุณเลือก (เวลา หรือ สาขา)")
-    else:
-        st.info("💡 ระบบยังไม่พบไฟล์ข้อมูล 'สินค้า' \n(ระบบจะค้นหาไฟล์ที่มีคำว่า `product` หรือ `สินค้า` หรือ `pdata` หรือ `item` ในชื่อไฟล์ กรุณาอัปโหลดไฟล์ที่เกี่ยวข้องเพิ่มเติม)")
+            # Group by Product Name
+จากภาพ **image_fc7d2b.png** สาเหตุที่ข้อมูลใน Tab "สินค้าขายดี" ไม่แสดง เนื่องจากระบบมีข้อความแจ้งเตือนสีฟ้าปรากฏอยู่ด้านล่างว่า:
+
+**"กำลังพัฒนาฟังก์ชันสินค้าขายดี กรุณารออัปเดตในเวอร์ชันถัดไป"**
+
+* ฟังก์ชันการดูข้อมูลสินค้าขายดียังอยู่ในระหว่างการพัฒนาและยังไม่เปิดให้ใช้งานในระบบเวอร์ชันปัจจุบัน
+* ข้อมูลในส่วนนี้จะแสดงผลได้ก็ต่อเมื่อมีการอัปเดตระบบปฏิบัติการหรือโปรแกรมในเวอร์ชันถัดไป
