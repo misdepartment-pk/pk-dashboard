@@ -230,17 +230,26 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Powered by peter pak: v.10.2.6")
 
 # ==========================================
-# 5. HEADER & DATE NAVIGATOR
+# 5. HEADER
 # ==========================================
-st.markdown("<h2 style='text-align: center; color: #0284c7; font-weight: 800; margin-bottom: 20px;'>ระบบแดชบอร์ดสรุปยอดขาย PK NOODLE SHOP</h2>", unsafe_allow_html=True)
+logo_img_tag = ""
+if os.path.exists("logo.png"):
+    with open("logo.png", "rb") as img_f:
+        encoded_img = base64.b64encode(img_f.read()).decode()
+    logo_img_tag = f'<img src="data:image/png;base64,{encoded_img}" style="height: 55px; margin-right: 15px; vertical-align: middle;">'
+else:
+    logo_img_tag = '<span style="font-size: 38px; margin-right: 12px; vertical-align: middle;">🍜</span>'
 
-st.markdown("<div style='background-color: #ffffff; padding: 12px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;'>", unsafe_allow_html=True)
-nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
-with nav_col1: st.button("❮ วันก่อนหน้า", on_click=go_prev, use_container_width=True, key="btn_prev_top")
-with nav_col2: st.date_input("เลือกวันที่", label_visibility="collapsed", key="nav_date")
-with nav_col3: st.button("วันถัดไป ❯", on_click=go_next, use_container_width=True, key="btn_next_top")
-st.markdown("</div>", unsafe_allow_html=True)
-
+header_html = f"""
+<div style="display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 20px; margin-top: -10px;">
+    {logo_img_tag}
+    <div style="font-size: 22px; font-weight: 800; font-family: sans-serif;">
+        <span style="color: #16a34a;">PK NOODLE SHOP COMPANY LIMITED </span>
+        <span style="color: #dc2626;">(Senior Soft- &gt;&gt;เริ่ม 5 สิงหาคม 2569)</span>
+    </div>
+</div>
+"""
+st.markdown(header_html, unsafe_allow_html=True)
 # ==========================================
 # 6. DATA FILTERING
 # ==========================================
