@@ -48,7 +48,7 @@ st.markdown("""
         background-color: #ffffff; border-bottom: 3px solid #ef4444 !important;
         color: #ef4444 !important;
     }
-    /* ปรับแต่งส่วน Date Navigator ให้เด่นชัดและจัดกึ่งกลาง */
+    /* ปรับแต่ง Date Navigator */
     div[data-testid="stDateInput"] input {
         text-align: center !important; color: #0284c7 !important;
         font-weight: 800 !important; font-size: 20px !important;
@@ -214,7 +214,7 @@ st.sidebar.caption("Powered by peter pak: v.10.2.3")
 st.markdown("<h2 style='text-align: center; color: #0284c7; font-weight: 800; margin-bottom: 4px;'>ระบบแดชบอร์ดสรุปยอดขาย PK NOODLE SHOP</h2>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #64748b; margin-top: 0px;'>อัปเดตข้อมูลล่าสุดอัตโนมัติจากไฟล์ที่อัปโหลด</p>", unsafe_allow_html=True)
 
-# --- DATE NAVIGATOR CONTROL (ส่วนหัว) ---
+# --- DATE NAVIGATOR CONTROL (ส่วนหัว - ซิงค์ตรงกับ Session State) ---
 st.markdown("<div style='background-color: #ffffff; padding: 12px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;'>", unsafe_allow_html=True)
 nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
 
@@ -222,8 +222,6 @@ with nav_col1:
     st.button("❮ วันก่อนหน้า", on_click=go_prev, use_container_width=True, key="btn_prev_top")
 
 with nav_col2:
-    # แก้ไขโดยใช้แค่ key="nav_date" ไม่ต้องมีการประกาศตัวแปรซ้ำ 
-    # ระบบจะซิงค์ค่าระหว่างปุ่มกับปฏิทินให้อัตโนมัติ
     st.date_input(
         "เลือกวันที่",
         label_visibility="collapsed",
@@ -431,7 +429,7 @@ with tab_trend:
     else:
         st.info("ไม่มีข้อมูลวันที่ที่สามารถสร้างกราฟได้")
 
-# --- TAB 3: ตารางตัวเลข ---
+# --- TAB 3: ตารางตัวเลข (สรุปผลตามเงื่อนไขการกรอง) ---
 with tab_table:
     if not df_filtered.empty:
         st.markdown("##### 📋 สรุปข้อมูลยอดขาย (รวมยอดตามวันและสาขา)")
