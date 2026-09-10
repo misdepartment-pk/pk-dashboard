@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import base64
 from datetime import datetime, timedelta
 
 # ==========================================
@@ -205,6 +206,7 @@ df_all = load_all_sales_data()
 # 4. SIDEBAR FILTERS
 # ==========================================
 st.sidebar.title("🔍 เมนูกรองข้อมูล")
+st.sidebar.markdown("##### 🗓️ 1. เลือกเวลาที่ต้องการดู")
 
 quick_time = st.sidebar.selectbox("เลือกช่วงเวลาแบบด่วน:", ["ใช้วันที่จาก Date Navigator (ด้านบน)", "ทั้งหมดในระบบ", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "30 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"])
 available_years = sorted([int(y) for y in df_all['Year_BE'].dropna().unique() if y > 2000], reverse=True)
@@ -230,7 +232,7 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Powered by peter pak: v.10.2.6")
 
 # ==========================================
-# 5. HEADER
+# 5. HEADER & DATE NAVIGATOR
 # ==========================================
 logo_img_tag = ""
 if os.path.exists("logo.png"):
@@ -250,6 +252,14 @@ header_html = f"""
 </div>
 """
 st.markdown(header_html, unsafe_allow_html=True)
+
+st.markdown("<div style='background-color: #ffffff; padding: 12px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;'>", unsafe_allow_html=True)
+nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
+with nav_col1: st.button("❮ วันก่อนหน้า", on_click=go_prev, use_container_width=True, key="btn_prev_top")
+with nav_col2: st.date_input("เลือกวันที่", label_visibility="collapsed", key="nav_date")
+with nav_col3: st.button("วันถัดไป ❯", on_click=go_next, use_container_width=True, key="btn_next_top")
+st.markdown("</div>", unsafe_allow_html=True)
+
 # ==========================================
 # 6. DATA FILTERING
 # ==========================================
