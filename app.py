@@ -8,7 +8,7 @@ import glob
 from datetime import datetime, timedelta
 
 # ==========================================
-# 1. PAGE CONFIG & CUSTOM CSS
+# 1. PAGE CONFIG & SESSION STATE
 # ==========================================
 st.set_page_config(
     page_title="PK NOODLE SHOP Dashboard",
@@ -16,6 +16,18 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# --- เพิ่ม Session State สำหรับ Date Navigator ---
+if 'nav_date' not in st.session_state:
+    current_time_th = datetime.utcnow() + timedelta(hours=7)
+    st.session_state.nav_date = current_time_th.date()
+
+def go_prev():
+    st.session_state.nav_date -= timedelta(days=1)
+
+def go_next():
+    st.session_state.nav_date += timedelta(days=1)
+# ------------------------------------------------
 
 st.markdown("""
 <style>
@@ -39,6 +51,13 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         background-color: #ffffff; border-bottom: 3px solid #ef4444 !important;
         color: #ef4444 !important;
+    }
+    /* แต่ง Date Navigator */
+    div[data-testid="stDateInput"] input {
+        text-align: center;
+        color: #0284c7;
+        font-weight: 700;
+        font-size: 16px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -199,7 +218,7 @@ selected_years = st.sidebar.multiselect("เลือกปี พ.ศ.:", optio
 
 quick_time = st.sidebar.selectbox(
     "เลือกช่วงเวลาแบบด่วน:",
-    ["ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "30 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"]
+    ["ใช้วันที่จาก Date Navigator", "ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "30 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"]
 )
 
 start_date, end_date = None, None
@@ -249,7 +268,9 @@ if quick_time != "ดูข้อมูลทั้งหมด" and not df_filt
     current_time_th = datetime.utcnow() + timedelta(hours=7)
     today_date = current_time_th.date()
     
-    if quick_time == "วันนี้":
+    if quick_time == "ใช้วันที่จาก Date Navigator":
+        df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
+    elif quick_time == "วันนี้":
         df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.date == today_date]
     elif quick_time == "เมื่อวาน":
         target_date = today_date - timedelta(days=1)
@@ -272,9 +293,8 @@ if quick_time != "ดูข้อมูลทั้งหมด" and not df_filt
         ]
 
 # ==========================================
-# 5. HEADER & TOP METRICS
+# 5. HEADER, DATE NAVIGATOR & TOP METRICS
 # ==========================================
-# ปรับสัดส่วนคอลัมน์ [5, 1] เพื่อขยายพื้นที่ฝั่งซ้ายไม่ให้ตัวอักษรตกบรรทัด
 col_header, col_space = st.columns([5, 1])
 
 with col_header:
@@ -296,6 +316,19 @@ with col_header:
         )
 
 st.markdown('<div class="trick-banner">🧮 <b>ทริค:</b> เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)</div>', unsafe_allow_html=True)
+
+# ------------------------------------------
+# ส่วนแสดงผล Date Navigator
+# ------------------------------------------
+nav_l, nav_m, nav_r = st.columns([1, 5, 1])
+with nav_l:
+    st.button("❮ วันก่อนหน้า", on_click=go_prev, use_container_width=True)
+with nav_m:
+    st.date_input("เลือกวันที่", key="nav_date", label_visibility="collapsed", format="DD/MM/YYYY")
+with nav_r:
+    st.button("วันถัดไป ❯", on_click=go_next, use_container_width=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ------------------------------------------
 # แสดงตัวชี้วัด (Metrics) 3 รายการ
@@ -476,7 +509,9 @@ with tab_bestseller:
             current_time_th = datetime.utcnow() + timedelta(hours=7)
             today_date = current_time_th.date()
             matched_q = pd.DataFrame()
-            if quick_time == "วันนี้":
+            if quick_time == "ใช้วันที่จาก Date Navigator":
+                matched_q = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
+            elif quick_time == "วันนี้":
                 matched_q = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == today_date]
             elif quick_time == "เมื่อวาน":
                 matched_q = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == (today_date - timedelta(days=1))]
