@@ -85,8 +85,8 @@ def process_product_dataframe(df_p):
     df_p.columns = [str(c).upper().strip() for c in df_p.columns]
     df_p = df_p.loc[:, ~df_p.columns.duplicated()]
     
-    # วันที่
-    date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'PDATA_DATE', 'DATE', 'DATETIME', 'TRAN_DATE', 'วันที่', 'TIME'] if c in df_p.columns), None)
+    # วันที่ - เน้น CF_TRANDATE
+    date_col = next((c for c in ['CF_TRANDATE', 'DOC_DATE', 'DOCDATE', 'TRANDATE', 'PSH_DATE', 'PDATA_DATE', 'DATE', 'DATETIME', 'TRAN_DATE', 'วันที่', 'TIME'] if c in df_p.columns), None)
     if date_col: df_p['Parsed_Date'] = df_p[date_col].apply(parse_thai_date)
     else: df_p['Parsed_Date'] = pd.NaT
     df_p['Year_BE'] = np.where(df_p['Parsed_Date'].notna(), df_p['Parsed_Date'].dt.year + 543, np.nan)
@@ -96,31 +96,31 @@ def process_product_dataframe(df_p):
     if branch_col: df_p['BRANCH_NAME'] = df_p[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
     else: df_p['BRANCH_NAME'] = 'สาขาหลัก'
     
-    # จำนวน
-    qty_col = next((c for c in ['PDATA_QTY', 'QTY', 'QUANTITY', 'AMOUNT_QTY', 'QTY_SOLD', 'TOTAL_QTY', 'SOLD_QTY', 'PD_QTY', 'จำนวน', 'จำนวนชิ้น', 'จำนวนขาย', 'ปริมาณ', 'COUNT'] if c in df_p.columns), None)
+    # จำนวน - เน้น QUANTITY
+    qty_col = next((c for c in ['QUANTITY', 'PDATA_QTY', 'QTY', 'AMOUNT_QTY', 'QTY_SOLD', 'TOTAL_QTY', 'SOLD_QTY', 'PD_QTY', 'จำนวน', 'จำนวนชิ้น', 'จำนวนขาย', 'ปริมาณ', 'COUNT'] if c in df_p.columns), None)
     if qty_col: df_p['QTY'] = pd.to_numeric(df_p[qty_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(1)
     else: df_p['QTY'] = 1.0
     
-    # ยอดขายรวม
-    sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'ยอดขาย', 'PDATA_NET_AMT', 'NET_AMT', 'TOTAL', 'PRICE', 'TOTAL_PRICE', 'ยอดรวม', 'จำนวนเงิน'] if c in df_p.columns), None)
+    # ยอดขายรวมของสินค้าแต่ละรายการ - เน้น AMOUNT (ยอดขายสุทธิต่อแถว) ป้องกันการดึง GRANDTOTAL (ยอดรวมทั้งบิล)
+    sales_col = next((c for c in ['AMOUNT', 'NET_AMT', 'PDATA_NET_AMT', 'TOTAL', 'PRICE', 'TOTAL_PRICE', 'GRAND_TOTAL', 'GRANDTOTAL', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'ยอดขาย', 'ยอดรวม', 'จำนวนเงิน'] if c in df_p.columns), None)
     if sales_col: df_p['GRANDTOTAL'] = pd.to_numeric(df_p[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0.0)
     else: df_p['GRANDTOTAL'] = 0.0
     
-    # ชื่อสินค้า
-    prod_col = next((c for c in ['PDATA_NAME', 'PRODUCT_NAME', 'NAME1', 'ITEM_NAME', 'GOODS_NAME', 'PD_NAME', 'DESCR', 'DESCRIPTION', 'ชื่อสินค้า', 'รายการ', 'สินค้า', 'NAME', 'TITLE', 'MENU'] if c in df_p.columns), None)
+    # ชื่อสินค้า - เน้น ITEMNAME
+    prod_col = next((c for c in ['ITEMNAME', 'PDATA_NAME', 'PRODUCT_NAME', 'NAME1', 'ITEM_NAME', 'GOODS_NAME', 'PD_NAME', 'DESCR', 'DESCRIPTION', 'ชื่อสินค้า', 'รายการ', 'สินค้า', 'NAME', 'TITLE', 'MENU'] if c in df_p.columns), None)
     if prod_col: df_p['PRODUCT_NAME'] = df_p[prod_col].astype(str).str.strip()
     else:
         str_cols = [c for c in df_p.columns if c not in ['Parsed_Date', 'Year_BE', 'BRANCH_NAME', 'QTY', 'GRANDTOTAL', date_col, branch_col, qty_col, sales_col]]
         if str_cols: df_p['PRODUCT_NAME'] = df_p[str_cols[0]].astype(str).str.strip()
         else: df_p['PRODUCT_NAME'] = 'ไม่ระบุชื่อสินค้า'
         
-    # หน่วย
-    unit_col = next((c for c in ['UNIT_NAME', 'UTQ_NAME', 'UNIT', 'UM', 'หน่วย', 'หน่วยนับ'] if c in df_p.columns), None)
+    # หน่วย - เน้น CF_UNITNAME
+    unit_col = next((c for c in ['CF_UNITNAME', 'UNIT_NAME', 'UTQ_NAME', 'UNIT', 'UM', 'หน่วย', 'หน่วยนับ'] if c in df_p.columns), None)
     if unit_col: df_p['UNIT'] = df_p[unit_col].astype(str).str.strip()
     else: df_p['UNIT'] = '-'
     
-    # เลขที่บิล
-    bill_col = next((c for c in ['DOC_NO', 'DOCNO', 'BILL_NO', 'BILLNO', 'PSH_DOC_NO', 'PDATA_DOC_NO', 'เลขที่เอกสาร', 'เลขที่บิล', 'REF_NO', 'DI_REF'] if c in df_p.columns), None)
+    # เลขที่บิล - เน้น TRANNO
+    bill_col = next((c for c in ['TRANNO', 'DOC_NO', 'DOCNO', 'BILL_NO', 'BILLNO', 'PSH_DOC_NO', 'PDATA_DOC_NO', 'เลขที่เอกสาร', 'เลขที่บิล', 'REF_NO', 'DI_REF'] if c in df_p.columns), None)
     if bill_col: df_p['BILL_NO'] = df_p[bill_col].astype(str).str.strip()
     else: df_p['BILL_NO'] = df_p.index.astype(str)
 
@@ -152,16 +152,20 @@ def load_all_sales_data():
     if not dfs: return pd.DataFrame(columns=['Parsed_Date', 'Year_BE', 'NAME', 'GRANDTOTAL', 'ORDER_COUNT'])
     df_combined = pd.concat(dfs, ignore_index=True).drop_duplicates()
     df_combined = df_combined.loc[:, ~df_combined.columns.duplicated()]
+    
     date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE'] if c in df_combined.columns), None)
     if date_col: df_combined['Parsed_Date'] = df_combined[date_col].apply(parse_thai_date)
     else: df_combined['Parsed_Date'] = pd.NaT
     df_combined['Year_BE'] = df_combined['Parsed_Date'].dt.year + 543
+    
     sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'PDATA_NET_AMT', 'ยอดขายทั้งสิ้น'] if c in df_combined.columns), None)
     if sales_col: df_combined['GRANDTOTAL'] = pd.to_numeric(df_combined[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0)
     else: df_combined['GRANDTOTAL'] = 0.0
+    
     branch_col = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'NAME', 'PSH_BR_NAME', 'สาขา'] if c in df_combined.columns), None)
     if branch_col: df_combined['NAME'] = df_combined[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
     else: df_combined['NAME'] = 'สาขาหลัก'
+    
     bill_col = next((c for c in ['ORDER_COUNT', 'BILL_COUNT', 'NO_OF_BILL', 'BILL_QTY', 'PDATA_QTY'] if c in df_combined.columns), None)
     if bill_col: df_combined['ORDER_COUNT'] = pd.to_numeric(df_combined[bill_col], errors='coerce').fillna(1)
     else: df_combined['ORDER_COUNT'] = 1
@@ -223,7 +227,7 @@ all_branches = sorted(df_all['NAME'].dropna().unique().tolist())
 if not all_branches: all_branches = ["ศรีเมือง", "ทุ่งปอ", "เจ้าพรหม", "บ้านไร่", "เทศบาล", "บ้านโป่ง"]
 selected_branches = st.sidebar.multiselect("เลือกสาขา:", options=all_branches, default=all_branches)
 st.sidebar.markdown("---")
-st.sidebar.caption("Powered by peter pak: v.10.2.4")
+st.sidebar.caption("Powered by peter pak: v.10.2.5")
 
 # ==========================================
 # 5. HEADER & DATE NAVIGATOR
@@ -442,7 +446,6 @@ with tab_bestseller:
                 st.markdown("##### Top 10 สินค้าขายดีที่สุด (ตามจำนวน)")
                 top10_df = summary_df.head(10).copy()
                 
-                # พาเลทสีหลากสีสำหรับกราฟแท่ง
                 bar_colors = px.colors.qualitative.Bold[:10]
                 if len(bar_colors) < len(top10_df):
                     bar_colors = px.colors.qualitative.Plotly[:10]
