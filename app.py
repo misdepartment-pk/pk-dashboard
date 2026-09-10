@@ -85,35 +85,42 @@ def process_product_dataframe(df_p):
     df_p.columns = [str(c).upper().strip() for c in df_p.columns]
     df_p = df_p.loc[:, ~df_p.columns.duplicated()]
     
+    # วันที่
     date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'PDATA_DATE', 'DATE', 'DATETIME', 'TRAN_DATE', 'วันที่', 'TIME'] if c in df_p.columns), None)
     if date_col: df_p['Parsed_Date'] = df_p[date_col].apply(parse_thai_date)
     else: df_p['Parsed_Date'] = pd.NaT
     df_p['Year_BE'] = np.where(df_p['Parsed_Date'].notna(), df_p['Parsed_Date'].dt.year + 543, np.nan)
     
+    # สาขา
     branch_col = next((c for c in ['BRANCH_NAME', 'BRANCHNAME', 'BRANCH', 'NAME', 'PSH_BR_NAME', 'สาขา', 'LOCATION'] if c in df_p.columns), None)
     if branch_col: df_p['BRANCH_NAME'] = df_p[branch_col].astype(str).str.replace('\u200b', '').str.replace('\xa0', ' ').str.replace('ตลาด', '').str.strip()
     else: df_p['BRANCH_NAME'] = 'สาขาหลัก'
     
-    qty_col = next((c for c in ['PDATA_QTY', 'QTY', 'QUANTITY', 'AMOUNT_QTY', 'จำนวน', 'จำนวนชิ้น', 'UNIT', 'COUNT', 'QTY_SOLD'] if c in df_p.columns), None)
+    # จำนวน
+    qty_col = next((c for c in ['PDATA_QTY', 'QTY', 'QUANTITY', 'AMOUNT_QTY', 'QTY_SOLD', 'TOTAL_QTY', 'SOLD_QTY', 'PD_QTY', 'จำนวน', 'จำนวนชิ้น', 'จำนวนขาย', 'ปริมาณ', 'COUNT'] if c in df_p.columns), None)
     if qty_col: df_p['QTY'] = pd.to_numeric(df_p[qty_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(1)
-    else: df_p['QTY'] = 1
+    else: df_p['QTY'] = 1.0
     
-    sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'ยอดขาย', 'PDATA_NET_AMT', 'NET_AMT', 'TOTAL', 'PRICE', 'TOTAL_PRICE', 'ยอดรวม'] if c in df_p.columns), None)
-    if sales_col: df_p['GRANDTOTAL'] = pd.to_numeric(df_p[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0)
+    # ยอดขายรวม
+    sales_col = next((c for c in ['GRAND_TOTAL', 'GRANDTOTAL', 'AMOUNT', 'PSD_N_AMT', 'ยอดขาย(บาท)', 'ยอดขาย', 'PDATA_NET_AMT', 'NET_AMT', 'TOTAL', 'PRICE', 'TOTAL_PRICE', 'ยอดรวม', 'จำนวนเงิน'] if c in df_p.columns), None)
+    if sales_col: df_p['GRANDTOTAL'] = pd.to_numeric(df_p[sales_col].astype(str).str.replace(',', '').str.strip(), errors='coerce').fillna(0.0)
     else: df_p['GRANDTOTAL'] = 0.0
     
-    prod_col = next((c for c in ['PDATA_NAME', 'PRODUCT_NAME', 'NAME1', 'ITEM_NAME', 'GOODS_NAME', 'DESCR', 'DESCRIPTION', 'ชื่อสินค้า', 'รายการ', 'สินค้า', 'NAME', 'TITLE', 'MENU'] if c in df_p.columns), None)
+    # ชื่อสินค้า
+    prod_col = next((c for c in ['PDATA_NAME', 'PRODUCT_NAME', 'NAME1', 'ITEM_NAME', 'GOODS_NAME', 'PD_NAME', 'DESCR', 'DESCRIPTION', 'ชื่อสินค้า', 'รายการ', 'สินค้า', 'NAME', 'TITLE', 'MENU'] if c in df_p.columns), None)
     if prod_col: df_p['PRODUCT_NAME'] = df_p[prod_col].astype(str).str.strip()
     else:
         str_cols = [c for c in df_p.columns if c not in ['Parsed_Date', 'Year_BE', 'BRANCH_NAME', 'QTY', 'GRANDTOTAL', date_col, branch_col, qty_col, sales_col]]
         if str_cols: df_p['PRODUCT_NAME'] = df_p[str_cols[0]].astype(str).str.strip()
         else: df_p['PRODUCT_NAME'] = 'ไม่ระบุชื่อสินค้า'
         
-    unit_col = next((c for c in ['UNIT_NAME', 'หน่วย', 'UNIT', 'UM', 'UTQ_NAME'] if c in df_p.columns), None)
+    # หน่วย
+    unit_col = next((c for c in ['UNIT_NAME', 'UTQ_NAME', 'UNIT', 'UM', 'หน่วย', 'หน่วยนับ'] if c in df_p.columns), None)
     if unit_col: df_p['UNIT'] = df_p[unit_col].astype(str).str.strip()
     else: df_p['UNIT'] = '-'
     
-    bill_col = next((c for c in ['DOC_NO', 'DOCNO', 'BILL_NO', 'เลขที่เอกสาร', 'เลขที่บิล', 'REF_NO', 'DI_REF'] if c in df_p.columns), None)
+    # เลขที่บิล
+    bill_col = next((c for c in ['DOC_NO', 'DOCNO', 'BILL_NO', 'BILLNO', 'PSH_DOC_NO', 'PDATA_DOC_NO', 'เลขที่เอกสาร', 'เลขที่บิล', 'REF_NO', 'DI_REF'] if c in df_p.columns), None)
     if bill_col: df_p['BILL_NO'] = df_p[bill_col].astype(str).str.strip()
     else: df_p['BILL_NO'] = df_p.index.astype(str)
 
@@ -375,55 +382,71 @@ with tab_bestseller:
         
         has_dates = 'Parsed_Date' in df_p_filtered.columns and not df_p_filtered['Parsed_Date'].isna().all()
         if has_dates:
-            if selected_years: df_p_filtered = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
+            if selected_years:
+                df_p_filtered = df_p_filtered[df_p_filtered['Year_BE'].isin(selected_years)]
             if selected_months:
                 month_map_p = {m: i+1 for i, m in enumerate(month_names)}
                 target_month_nums_p = [month_map_p[m] for m in selected_months if m in month_map_p]
                 df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.month.isin(target_month_nums_p)]
             if quick_time != "ทั้งหมดในระบบ" and not df_p_filtered.empty:
-                if quick_time == "ใช้วันที่จาก Date Navigator (ด้านบน)": df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
-                elif quick_time == "วันนี้": df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == today_date]
-                elif quick_time == "เมื่อวาน": df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == (today_date - timedelta(days=1))]
-                elif quick_time == "7 วันล่าสุด": df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=7))]
-                elif quick_time == "30 วันล่าสุด": df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=30))]
-                elif quick_time == "เดือนนี้": df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.month == today_date.month) & (df_p_filtered['Parsed_Date'].dt.year == today_date.year)]
-                elif quick_time == "กำหนดเอง (เลือกปฏิทิน)" and start_date and end_date: df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.date >= start_date) & (df_p_filtered['Parsed_Date'].dt.date <= end_date)]
+                if quick_time == "ใช้วันที่จาก Date Navigator (ด้านบน)":
+                    df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
+                elif quick_time == "วันนี้":
+                    df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == today_date]
+                elif quick_time == "เมื่อวาน":
+                    df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == (today_date - timedelta(days=1))]
+                elif quick_time == "7 วันล่าสุด":
+                    df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=7))]
+                elif quick_time == "30 วันล่าสุด":
+                    df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date >= (today_date - timedelta(days=30))]
+                elif quick_time == "เดือนนี้":
+                    df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.month == today_date.month) & (df_p_filtered['Parsed_Date'].dt.year == today_date.year)]
+                elif quick_time == "กำหนดเอง (เลือกปฏิทิน)" and start_date and end_date:
+                    df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.date >= start_date) & (df_p_filtered['Parsed_Date'].dt.date <= end_date)]
 
         has_branches = 'BRANCH_NAME' in df_p_filtered.columns and df_p_filtered['BRANCH_NAME'].nunique() > 1
         if selected_branches and has_branches:
             df_p_filtered = df_p_filtered[df_p_filtered['BRANCH_NAME'].isin(selected_branches)]
 
         if not df_p_filtered.empty:
-            df_p_filtered = df_p_filtered[~df_p_filtered['PRODUCT_NAME'].astype(str).str.lower().isin(['', 'nan', 'none', '0', 'nan.0'])]
+            # กรองรายการสินค้าที่ไม่สมบูรณ์ออก
+            df_p_filtered = df_p_filtered[
+                ~df_p_filtered['PRODUCT_NAME'].astype(str).str.strip().str.lower().isin(['', 'nan', 'none', '0', 'nan.0', 'ไม่ระบุชื่อสินค้า'])
+            ]
             
-            # การจัดกลุ่ม (แก้ KeyError ด้วยการใช้ Dict และ rename ทีหลัง)
+            # รวมกลุ่มข้อมูลตามชื่อสินค้า
             summary_df = df_p_filtered.groupby('PRODUCT_NAME', as_index=False).agg({
+                'UNIT': lambda x: next((v for v in x if str(v).strip() not in ['', '-', 'nan', 'None']), '-'),
                 'GRANDTOTAL': 'sum',
                 'QTY': 'sum',
-                'UNIT': 'first',
                 'BILL_NO': 'nunique'
             })
             
             # เปลี่ยนชื่อคอลัมน์
             summary_df.rename(columns={
+                'PRODUCT_NAME': 'ชื่อสินค้า',
+                'UNIT': 'หน่วย',
                 'GRANDTOTAL': 'ยอดขายรวม',
                 'QTY': 'จำนวนที่ขาย',
-                'UNIT': 'หน่วย',
                 'BILL_NO': 'บิลที่มีสินค้านี้'
             }, inplace=True)
             
-            # จัดเรียงลำดับ
-            summary_df = summary_df.sort_values('จำนวนที่ขาย', ascending=False).reset_index(drop=True)
+            # เรียงลำดับจากมากไปน้อยตามจำนวนที่ขาย
+            summary_df = summary_df.sort_values(by='จำนวนที่ขาย', ascending=False).reset_index(drop=True)
             summary_df.index = summary_df.index + 1
-            summary_df = summary_df.reset_index().rename(columns={'index': 'ลำดับ', 'PRODUCT_NAME': 'ชื่อสินค้า'})
+            summary_df = summary_df.reset_index().rename(columns={'index': 'ลำดับ'})
             
             c1, c2 = st.columns([4.5, 5.5])
             
             with c1:
                 st.markdown("##### Top 10 สินค้าขายดีที่สุด (ตามจำนวน)")
                 top10_df = summary_df.head(10).copy()
-                top10_df = top10_df.sort_values('จำนวนที่ขาย', ascending=True)
                 
+                # พาเลทสีหลากสีสำหรับกราฟแท่ง
+                bar_colors = px.colors.qualitative.Bold[:10]
+                if len(bar_colors) < len(top10_df):
+                    bar_colors = px.colors.qualitative.Plotly[:10]
+
                 fig_prod = px.bar(
                     top10_df, 
                     x='จำนวนที่ขาย', 
@@ -431,14 +454,18 @@ with tab_bestseller:
                     orientation='h',
                     text='จำนวนที่ขาย',
                     color='ชื่อสินค้า',
-                    color_discrete_sequence=px.colors.qualitative.Plotly
+                    color_discrete_sequence=bar_colors
                 )
-                fig_prod.update_traces(texttemplate='%{text:,.0f}', textposition='outside', showlegend=False)
+                fig_prod.update_traces(
+                    texttemplate='%{text:,.0f}', 
+                    textposition='outside', 
+                    showlegend=False
+                )
                 fig_prod.update_layout(
                     xaxis_title="จำนวนที่ขาย", 
                     yaxis_title="",
-                    height=500,
-                    margin=dict(l=10, r=40, t=10, b=10),
+                    height=520,
+                    margin=dict(l=10, r=45, t=10, b=10),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)'
                 )
@@ -448,8 +475,9 @@ with tab_bestseller:
                 
             with c2:
                 st.markdown("##### ตารางรายละเอียดสินค้าขายดี 20 อันดับแรก")
+                table_top20 = summary_df.head(20)[['ลำดับ', 'ชื่อสินค้า', 'หน่วย', 'ยอดขายรวม', 'จำนวนที่ขาย', 'บิลที่มีสินค้านี้']]
                 st.dataframe(
-                    summary_df.head(20).style.format({
+                    table_top20.style.format({
                         'ยอดขายรวม': '฿{:,.2f}',
                         'จำนวนที่ขาย': '{:,.0f}',
                         'บิลที่มีสินค้านี้': '{:,.0f}'
