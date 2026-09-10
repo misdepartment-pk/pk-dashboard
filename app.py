@@ -104,6 +104,7 @@ def load_all_sales_data():
                 df_temp = pd.read_excel(filename)
                 
             df_temp.columns = [str(c).upper().strip() for c in df_temp.columns]
+            df_temp = df_temp.loc[:, ~df_temp.columns.duplicated()]
             dfs.append(df_temp)
         except: pass
                 
@@ -111,6 +112,7 @@ def load_all_sales_data():
         return pd.DataFrame(columns=['Parsed_Date', 'Year_BE', 'NAME', 'GRANDTOTAL', 'ORDER_COUNT'])
         
     df_combined = pd.concat(dfs, ignore_index=True).drop_duplicates()
+    df_combined = df_combined.loc[:, ~df_combined.columns.duplicated()]
     
     date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_CODE'] if c in df_combined.columns), None)
     if date_col: df_combined['Parsed_Date'] = df_combined[date_col].apply(parse_thai_date)
@@ -142,11 +144,13 @@ def load_product_data():
                 except: df = pd.read_csv(f, encoding='tis-620', low_memory=False)
             else: df = pd.read_excel(f)
             df.columns = [str(c).upper().strip() for c in df.columns]
+            df = df.loc[:, ~df.columns.duplicated()]
             dfs.append(df)
         except: pass
         
     if not dfs: return pd.DataFrame()
     df_p = pd.concat(dfs, ignore_index=True)
+    df_p = df_p.loc[:, ~df_p.columns.duplicated()]
     
     date_col = next((c for c in ['DOC_DATE', 'DOCDATE', 'TRANDATE', 'CF_TRANDATE', 'PSH_DATE', 'วันที่', 'PDATA_DATE'] if c in df_p.columns), None)
     if date_col: df_p['Parsed_Date'] = df_p[date_col].apply(parse_thai_date)
@@ -214,7 +218,7 @@ st.sidebar.caption("Powered by peter pak: v.10.2.3")
 st.markdown("<h2 style='text-align: center; color: #0284c7; font-weight: 800; margin-bottom: 4px;'>ระบบแดชบอร์ดสรุปยอดขาย PK NOODLE SHOP</h2>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #64748b; margin-top: 0px;'>อัปเดตข้อมูลล่าสุดอัตโนมัติจากไฟล์ที่อัปโหลด</p>", unsafe_allow_html=True)
 
-# --- DATE NAVIGATOR CONTROL (ส่วนหัว - ซิงค์ตรงกับ Session State) ---
+# --- DATE NAVIGATOR CONTROL (ส่วนหัว) ---
 st.markdown("<div style='background-color: #ffffff; padding: 12px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;'>", unsafe_allow_html=True)
 nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
 
@@ -308,11 +312,8 @@ tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs(["🏢 ยอดร�
 # --- TAB 1: ยอดรวมสาขา (% ยอดขาย & กราฟ) ---
 with tab_branch:
     if not df_filtered.empty:
-        branch_sales = df_filtered.groupby('NAME').agg(
-            Total_Sales=('GRANDTOTAL', 'sum'), 
-            Total_Bills=('ORDER_COUNT', 'sum')
-        ).reset_index()
-        
+        branch_sales = df_filtered.groupby('NAME', as_index=False)[['GRANDTOTAL', 'ORDER_COUNT']].sum()
+        branch_sales.rename(columns={'GRANDTOTAL': 'Total_Sales', 'ORDER_COUNT': 'Total_Bills'}, inplace=True)
         branch_sales = branch_sales.sort_values(by='Total_Sales', ascending=False)
         
         # คำนวณ % ยอดขาย
@@ -414,8 +415,8 @@ with tab_branch:
 # --- TAB 2: เทรนด์รายวัน ---
 with tab_trend:
     if not df_filtered.empty and not df_filtered['Parsed_Date'].isna().all():
-        daily_sales = df_filtered.groupby(df_filtered['Parsed_Date'].dt.date).agg(Total_Sales=('GRANDTOTAL', 'sum')).reset_index()
-        daily_sales.rename(columns={'Parsed_Date': 'Date'}, inplace=True)
+        daily_sales = df_filtered.groupby(df_filtered['Parsed_Date'].dt.date, as_index=False)['GRANDTOTAL'].sum()
+        daily_sales.columns = ['Date', 'Total_Sales']
         daily_sales = daily_sales.sort_values('Date')
         
         if len(daily_sales) > 1:
@@ -434,11 +435,12 @@ with tab_table:
     if not df_filtered.empty:
         st.markdown("##### 📋 สรุปข้อมูลยอดขาย (รวมยอดตามวันและสาขา)")
         
+        # ลบคอลัมน์ซ้ำกันออกก่อนรวมยอดเพื่อป้องกันปัญหา
+        df_tab3 = df_filtered.loc[:, ~df_filtered.columns.duplicated()].copy()
+        
         # 1. จัดกลุ่มข้อมูล (Group By) ตามวันที่และสาขา
-        summary_table = df_filtered.groupby(['Parsed_Date', 'NAME']).agg(
-            ยอดขายรวม=('GRANDTOTAL', 'sum'),
-            จำนวนบิล=('ORDER_COUNT', 'sum')
-        ).reset_index()
+        summary_table = df_tab3.groupby(['Parsed_Date', 'NAME'], as_index=False)[['GRANDTOTAL', 'ORDER_COUNT']].sum()
+        summary_table.rename(columns={'GRANDTOTAL': 'ยอดขายรวม', 'ORDER_COUNT': 'จำนวนบิล'}, inplace=True)
         
         # 2. คำนวณยอดเฉลี่ยต่อบิล
         summary_table['ยอดเฉลี่ย/บิล'] = np.where(
@@ -463,7 +465,7 @@ with tab_table:
             'ยอดเฉลี่ย/บิล': 'เฉลี่ย/บิล (บาท)'
         }, inplace=True)
         
-        # 6. แสดงตารางพร้อมจัดรูปแบบตัวเลข (Format) ให้สวยงามและอ่านง่าย
+        # 6. แสดงตารางพร้อมจัดรูปแบบตัวเลข (Format)
         st.dataframe(
             summary_table.style.format({
                 'ยอดขายรวม (บาท)': '฿{:,.2f}',
@@ -519,8 +521,8 @@ with tab_bestseller:
                 df_p_filtered = df_p_filtered[(df_p_filtered['Parsed_Date'].dt.date >= start_date) & (df_p_filtered['Parsed_Date'].dt.date <= end_date)]
 
         if not df_p_filtered.empty:
-            top_sales = df_p_filtered.groupby('PRODUCT_NAME')['GRANDTOTAL'].sum().reset_index().sort_values(by='GRANDTOTAL', ascending=False).head(10)
-            top_qty = df_p_filtered.groupby('PRODUCT_NAME')['QTY'].sum().reset_index().sort_values(by='QTY', ascending=False).head(10)
+            top_sales = df_p_filtered.groupby('PRODUCT_NAME', as_index=False)['GRANDTOTAL'].sum().sort_values(by='GRANDTOTAL', ascending=False).head(10)
+            top_qty = df_p_filtered.groupby('PRODUCT_NAME', as_index=False)['QTY'].sum().sort_values(by='QTY', ascending=False).head(10)
             
             c1, c2 = st.columns(2)
             with c1:
@@ -542,10 +544,10 @@ with tab_bestseller:
                 st.plotly_chart(fig_prod_qty, use_container_width=True)
                 
             st.markdown("###### 📋 ตารางรายละเอียดสินค้าทั้งหมด")
-            summary_df = df_p_filtered.groupby('PRODUCT_NAME').agg(
-                จำนวน_ชิ้น=('QTY', 'sum'), 
-                ยอดขายรวม=('GRANDTOTAL', 'sum')
-            ).reset_index().sort_values(by='ยอดขายรวม', ascending=False)
+            summary_df = df_p_filtered.groupby('PRODUCT_NAME', as_index=False).agg({
+                'QTY': 'sum',
+                'GRANDTOTAL': 'sum'
+            }).rename(columns={'QTY': 'จำนวน_ชิ้น', 'GRANDTOTAL': 'ยอดขายรวม'}).sort_values(by='ยอดขายรวม', ascending=False)
             
             st.dataframe(summary_df.style.format({'จำนวน_ชิ้น': '{:,.0f}', 'ยอดขายรวม': '{:,.2f}'}), use_container_width=True)
         else:
