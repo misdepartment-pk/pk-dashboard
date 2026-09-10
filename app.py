@@ -38,11 +38,6 @@ st.markdown("""
     }
     .metric-value { font-size: 28px; font-weight: 700; color: #1e293b; }
     .metric-label { font-size: 14px; color: #64748b; margin-bottom: 4px; }
-    .trick-banner {
-        background-color: #e0f2fe; color: #0369a1; padding: 10px 16px;
-        border-radius: 8px; font-size: 14px; margin-bottom: 20px;
-        display: flex; align-items: center; gap: 8px;
-    }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
         height: 45px; white-space: pre-wrap; background-color: #ffffff;
@@ -178,16 +173,15 @@ df_all = load_all_sales_data()
 # 4. SIDEBAR FILTERS
 # ==========================================
 st.sidebar.title("🔍 เมนูกรองข้อมูล")
-st.sidebar.markdown("### 📅 1. เลือกเวลาที่ต้องการดู")
+
+quick_time = st.sidebar.selectbox(
+    "เลือกช่วงเวลา:",
+    ["ทั้งหมดในระบบ", "ใช้วันที่จาก Date Navigator", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "30 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"]
+)
 
 available_years = sorted([int(y) for y in df_all['Year_BE'].dropna().unique() if y > 2000], reverse=True)
 if not available_years: available_years = [2569, 2568]
 selected_years = st.sidebar.multiselect("เลือกปี พ.ศ.:", options=available_years, default=available_years)
-
-quick_time = st.sidebar.selectbox(
-    "เลือกช่วงเวลาแบบด่วน:",
-    ["ใช้วันที่จาก Date Navigator", "ดูข้อมูลทั้งหมด", "วันนี้", "เมื่อวาน", "7 วันล่าสุด", "30 วันล่าสุด", "เดือนนี้", "กำหนดเอง (เลือกปฏิทิน)"]
-)
 
 start_date, end_date = None, None
 if quick_time == "กำหนดเอง (เลือกปฏิทิน)":
@@ -196,17 +190,16 @@ if quick_time == "กำหนดเอง (เลือกปฏิทิน)":
     date_range = st.sidebar.date_input("เลือกช่วงวันที่:", [min_d, max_d])
     if len(date_range) == 2: start_date, end_date = date_range[0], date_range[1]
 
-with st.sidebar.expander("➕ กรองตามเดือน (สำหรับดูข้ามปี)", expanded=False):
-    month_names = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", 
-                   "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
+month_names = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", 
+               "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
+
+with st.sidebar.expander("➕ กรองตามเดือน", expanded=False):
     selected_months = st.sidebar.multiselect("เลือกเดือนที่ต้องการดู:", month_names, default=[])
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🏬 2. เลือกสาขา")
-
 all_branches = sorted(df_all['NAME'].dropna().unique().tolist())
 if not all_branches: all_branches = ["ศรีเมือง", "ทุ่งปอ", "เจ้าพรหม", "บ้านไร่", "เทศบาล", "บ้านโป่ง"]
-selected_branches = st.sidebar.multiselect("กด X เพื่อลบ หรือพิมพ์เพื่อหาสาขา:", options=all_branches, default=all_branches)
+selected_branches = st.sidebar.multiselect("เลือกสาขา:", options=all_branches, default=all_branches)
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Powered by peter pak: v.10.2.3")
@@ -231,10 +224,11 @@ if selected_months:
     target_month_nums = [month_map[m] for m in selected_months if m in month_map]
     df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.month.isin(target_month_nums)]
 
+current_time_th = datetime.utcnow() + timedelta(hours=7)
 today_date = current_time_th.date()
 df_prev = pd.DataFrame()
 
-if quick_time != "ดูข้อมูลทั้งหมด" and not df_filtered.empty:
+if quick_time != "ทั้งหมดในระบบ" and not df_filtered.empty:
     if quick_time == "ใช้วันที่จาก Date Navigator":
         df_filtered = df_filtered[df_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
         df_prev = df_all[(df_all['Parsed_Date'].dt.date == (st.session_state.nav_date - timedelta(days=1))) & (df_all['NAME'].isin(selected_branches))]
@@ -278,8 +272,6 @@ if quick_time in ["ใช้วันที่จาก Date Navigator", "วั
         color = "#10b981" if diff_pct >= 0 else "#ef4444"
         arrow = "▲" if diff_pct >= 0 else "▼"
         delta_sales_html = f"<div style='color: {color}; font-size: 14px; font-weight: 600; margin-top: 4px;'>{arrow} {diff_pct:.1f}% เทียบกับวันก่อนหน้า</div>"
-    else:
-        delta_sales_html = f"<div style='color: #64748b; font-size: 14px; margin-top: 4px;'>ไม่มียอดของวันก่อนหน้า</div>"
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -298,28 +290,71 @@ tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs(["🏢 ยอดร�
 # 7. TAB CONTENT
 # ==========================================
 
-# --- TAB 1: ยอดรวมสาขา ---
+# --- TAB 1: ยอดรวมสาขา (ปรับให้ตรงภาพตัวอย่าง) ---
 with tab_branch:
     if not df_filtered.empty:
         branch_sales = df_filtered.groupby('NAME').agg(Total_Sales=('GRANDTOTAL', 'sum'), Total_Bills=('ORDER_COUNT', 'sum')).reset_index()
         branch_sales = branch_sales.sort_values(by='Total_Sales', ascending=False)
-        branch_sales['Avg_Bill'] = np.where(branch_sales['Total_Bills'] > 0, branch_sales['Total_Sales'] / branch_sales['Total_Bills'], 0)
+        
+        # กำหนดพาเลทสีประจำสาขาให้เหมือนในภาพ
+        branch_colors = {
+            'ศรีเมือง': '#FF3B30',
+            'ทุ่งปอ': '#3478F6',
+            'เจ้าพรหม': '#A259FF',
+            'บ้านไร่': '#00C853',
+            'เทศบาล': '#FFC107',
+            'บ้านโป่ง': '#FF2D55'
+        }
         
         c1, c2 = st.columns([6, 4])
         with c1:
-            st.markdown("##### 🏆 จัดอันดับยอดขายแต่ละสาขา")
-            fig_bar = px.bar(branch_sales.sort_values(by='Total_Sales', ascending=True), 
-                             x='Total_Sales', y='NAME', orientation='h', 
-                             text='Total_Sales', color='Total_Sales', color_continuous_scale='Blues')
-            fig_bar.update_traces(texttemplate='฿%{text:,.2f}', textposition='outside')
-            fig_bar.update_layout(xaxis_title="ยอดขาย (บาท)", yaxis_title="", showlegend=False, height=350, margin=dict(l=10, r=50, t=10, b=10))
+            st.markdown("#### ยอดขาย (กราฟแท่ง)")
+            fig_bar = px.bar(
+                branch_sales, 
+                x='NAME', 
+                y='Total_Sales', 
+                color='NAME',
+                color_discrete_map=branch_colors,
+                text='Total_Sales'
+            )
+            fig_bar.update_traces(
+                texttemplate='฿%{text:,.2f}', 
+                textposition='outside',
+                textfont_size=12
+            )
+            fig_bar.update_layout(
+                xaxis_title="",
+                yaxis_title="ยอดขาย (บาท)",
+                showlegend=False,
+                height=450,
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                margin=dict(l=20, r=20, t=30, b=20),
+                yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
+            )
             st.plotly_chart(fig_bar, use_container_width=True)
             
         with c2:
-            st.markdown("##### 🍰 สัดส่วนยอดขาย")
-            fig_pie = px.pie(branch_sales, values='Total_Sales', names='NAME', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_pie.update_traces(textinfo='percent+label', textposition='inside')
-            fig_pie.update_layout(height=350, margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+            st.markdown("#### สัดส่วนยอดขาย (กราฟโดนัท)")
+            fig_pie = px.pie(
+                branch_sales, 
+                values='Total_Sales', 
+                names='NAME', 
+                hole=0.55,
+                color='NAME',
+                color_discrete_map=branch_colors
+            )
+            fig_pie.update_traces(
+                textinfo='label+percent',
+                textposition='inside',
+                insidetextorientation='horizontal'
+            )
+            fig_pie.update_layout(
+                height=450,
+                showlegend=True,
+                margin=dict(l=10, r=10, t=30, b=10),
+                legend=dict(orientation="v", yanchor="top", y=0.9, xanchor="left", x=0.95)
+            )
             st.plotly_chart(fig_pie, use_container_width=True)
     else:
         st.info("ไม่พบข้อมูลสำหรับช่วงเวลาหรือสาขาที่เลือก")
@@ -380,7 +415,7 @@ with tab_bestseller:
             target_month_nums_p = [month_map_p[m] for m in selected_months if m in month_map_p]
             df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.month.isin(target_month_nums_p)]
 
-        if quick_time != "ดูข้อมูลทั้งหมด" and not df_p_filtered.empty:
+        if quick_time != "ทั้งหมดในระบบ" and not df_p_filtered.empty:
             if quick_time == "ใช้วันที่จาก Date Navigator":
                 df_p_filtered = df_p_filtered[df_p_filtered['Parsed_Date'].dt.date == st.session_state.nav_date]
             elif quick_time == "วันนี้":
@@ -429,4 +464,4 @@ with tab_bestseller:
         else:
             st.warning("ไม่พบข้อมูลสินค้าขายดี ภายใต้เงื่อนไขที่คุณเลือก (เวลา หรือ สาขา)")
     else:
-        st.info("💡 ระบบยังไม่พบไฟล์ข้อมูล 'สินค้า' \n(ระบบจะค้นหาไฟล์ที่มีคำว่า `product` หรือ `สินค้า` หรือ `pdata` หรือ `item` ในชื่อไฟล์ กรุณาอัปโหลดไฟล์ที่เกี่ยวข้องเพิ่มเติม)")
+        st.info("💡 ระบบยังไม่พบไฟล์ข้อมูล 'สินค้า'")
