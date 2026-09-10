@@ -434,15 +434,50 @@ with tab_trend:
 # --- TAB 3: ตารางตัวเลข ---
 with tab_table:
     if not df_filtered.empty:
-        st.markdown("##### 📋 ข้อมูลดิบ (ตามช่วงเวลาที่กรอง)")
-        display_df = df_filtered[['Parsed_Date', 'NAME', 'GRANDTOTAL', 'ORDER_COUNT']].copy()
-        if not display_df['Parsed_Date'].isna().all():
-            display_df['Parsed_Date'] = display_df['Parsed_Date'].dt.strftime('%d/%m/%Y')
-        display_df.rename(columns={'Parsed_Date': 'วันที่', 'NAME': 'สาขา', 'GRANDTOTAL': 'ยอดขายรวม', 'ORDER_COUNT': 'จำนวนบิล'}, inplace=True)
-        st.dataframe(display_df, use_container_width=True)
+        st.markdown("##### 📋 สรุปข้อมูลยอดขาย (รวมยอดตามวันและสาขา)")
         
-        csv = display_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 ดาวน์โหลดข้อมูลเป็น CSV", csv, "sales_data.csv", "text/csv", use_container_width=True)
+        # 1. จัดกลุ่มข้อมูล (Group By) ตามวันที่และสาขา
+        summary_table = df_filtered.groupby(['Parsed_Date', 'NAME']).agg(
+            ยอดขายรวม=('GRANDTOTAL', 'sum'),
+            จำนวนบิล=('ORDER_COUNT', 'sum')
+        ).reset_index()
+        
+        # 2. คำนวณยอดเฉลี่ยต่อบิล
+        summary_table['ยอดเฉลี่ย/บิล'] = np.where(
+            summary_table['จำนวนบิล'] > 0, 
+            summary_table['ยอดขายรวม'] / summary_table['จำนวนบิล'], 
+            0
+        )
+        
+        # 3. เรียงลำดับข้อมูล (วันที่ล่าสุดขึ้นก่อน ตามด้วยยอดขายสูงสุด)
+        summary_table = summary_table.sort_values(by=['Parsed_Date', 'ยอดขายรวม'], ascending=[False, False])
+        
+        # 4. ปรับฟอร์แมตวันที่ให้สวยงาม
+        if not summary_table['Parsed_Date'].isna().all():
+            summary_table['Parsed_Date'] = summary_table['Parsed_Date'].dt.strftime('%d/%m/%Y')
+            
+        # 5. เปลี่ยนชื่อคอลัมน์เพื่อแสดงผล
+        summary_table.rename(columns={
+            'Parsed_Date': 'วันที่',
+            'NAME': 'สาขา',
+            'ยอดขายรวม': 'ยอดขายรวม (บาท)',
+            'จำนวนบิล': 'จำนวนบิล (ใบ)',
+            'ยอดเฉลี่ย/บิล': 'เฉลี่ย/บิล (บาท)'
+        }, inplace=True)
+        
+        # 6. แสดงตารางพร้อมจัดรูปแบบตัวเลข (Format) ให้สวยงามและอ่านง่าย
+        st.dataframe(
+            summary_table.style.format({
+                'ยอดขายรวม (บาท)': '฿{:,.2f}',
+                'จำนวนบิล (ใบ)': '{:,.0f}',
+                'เฉลี่ย/บิล (บาท)': '฿{:,.2f}'
+            }),
+            use_container_width=True
+        )
+        
+        # 7. ปุ่มดาวน์โหลด
+        csv = summary_table.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("📥 ดาวน์โหลดข้อมูลสรุปเป็น CSV", csv, "summary_sales_data.csv", "text/csv", use_container_width=True)
     else:
         st.info("ไม่พบข้อมูล")
 
