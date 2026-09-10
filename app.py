@@ -222,11 +222,12 @@ with nav_col1:
     st.button("❮ วันก่อนหน้า", on_click=go_prev, use_container_width=True, key="btn_prev_top")
 
 with nav_col2:
-    st.session_state.nav_date = st.date_input(
+    # แก้ไขโดยใช้แค่ key="nav_date" ไม่ต้องมีการประกาศตัวแปรซ้ำ 
+    # ระบบจะซิงค์ค่าระหว่างปุ่มกับปฏิทินให้อัตโนมัติ
+    st.date_input(
         "เลือกวันที่",
-        value=st.session_state.nav_date,
         label_visibility="collapsed",
-        key="date_picker_top"
+        key="nav_date"
     )
 
 with nav_col3:
