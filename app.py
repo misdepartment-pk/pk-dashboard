@@ -297,6 +297,44 @@ with col_header:
         )
 
 st.markdown('<div class="trick-banner">🧮 <b>ทริค:</b> เมนูกรองข้อมูลอยู่ด้านซ้ายมือ (หากซ่อนอยู่ให้กดปุ่ม > เพื่อเปิด)</div>', unsafe_allow_html=True)
+
+# ------------------------------------------
+# ส่วนเพิ่มใหม่: แสดงตัวชี้วัด (Metrics) 3 รายการ
+# ------------------------------------------
+# คำนวณยอดจากข้อมูลที่ผ่านการกรอง (df_filtered)
+total_sales = df_filtered['GRANDTOTAL'].sum()
+total_bills = len(df_filtered) # นับจากจำนวนแถว (บรรทัด)
+avg_per_bill = total_sales / total_bills if total_bills > 0 else 0
+
+# วาดการ์ด 3 คอลัมน์ โดยเรียกใช้ Class CSS ของคุณ
+m1, m2, m3 = st.columns(3)
+
+with m1:
+    st.markdown(f'''
+        <div class="metric-card">
+            <div class="metric-label">ยอดขายรวมทั้งหมด (บาท)</div>
+            <div class="metric-value">฿{total_sales:,.2f}</div>
+        </div>
+    ''', unsafe_allow_html=True)
+
+with m2:
+    st.markdown(f'''
+        <div class="metric-card">
+            <div class="metric-label">จำนวนบิล (นับจากจำนวนบรรทัด)</div>
+            <div class="metric-value">{total_bills:,}</div>
+        </div>
+    ''', unsafe_allow_html=True)
+
+with m3:
+    st.markdown(f'''
+        <div class="metric-card">
+            <div class="metric-label">ยอดเฉลี่ยต่อบิล (บาท)</div>
+            <div class="metric-value">฿{avg_per_bill:,.2f}</div>
+        </div>
+    ''', unsafe_allow_html=True)
+
+# เว้นช่องว่างเล็กน้อยก่อนแสดงเนื้อหา Tabs (Section 7)
+st.markdown("<br>", unsafe_allow_html=True)
 # ==========================================
 # 6. CHART DRAWING HELPER FUNCTIONS
 # ==========================================
