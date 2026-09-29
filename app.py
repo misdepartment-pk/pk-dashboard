@@ -351,7 +351,6 @@ with tab_trend:
         else: st.info("มีข้อมูลเพียง 1 วัน ไม่สามารถสร้างกราฟแนวโน้มได้")
     else: st.info("ไม่มีข้อมูลวันที่ที่สามารถสร้างกราฟได้")
 
-# --- การแก้ไข: ลำดับตารางตัวเลข ---
 with tab_table:
     if not df_filtered.empty:
         st.markdown("##### 📋 สรุปข้อมูลยอดขาย (รวมยอดตามวันและสาขา)")
@@ -361,16 +360,13 @@ with tab_table:
         summary_table['ยอดเฉลี่ย/บิล'] = np.where(summary_table['จำนวนบิล'] > 0, summary_table['ยอดขายรวม'] / summary_table['จำนวนบิล'], 0)
         summary_table = summary_table.sort_values(by=['Parsed_Date', 'ยอดขายรวม'], ascending=[False, False])
         
-        # รีเซ็ตตัวเลขให้เรียง 1, 2, 3...
-        summary_table = summary_table.reset_index(drop=True)
-        summary_table.index = summary_table.index + 1
-        summary_table = summary_table.reset_index().rename(columns={'index': 'ลำดับ'})
+        # --- แก้ไขส่วนตารางตัวเลข: สร้างคอลัมน์ ลำดับ แทรกด้านหน้า ---
+        summary_table.insert(0, 'ลำดับ', range(1, len(summary_table) + 1))
         
         if not summary_table['Parsed_Date'].isna().all(): 
             summary_table['Parsed_Date'] = summary_table['Parsed_Date'].dt.strftime('%d/%m/%Y')
         summary_table.rename(columns={'Parsed_Date': 'วันที่', 'NAME': 'สาขา', 'ยอดขายรวม': 'ยอดขายรวม (บาท)', 'จำนวนบิล': 'จำนวนบิล (ใบ)', 'ยอดเฉลี่ย/บิล': 'เฉลี่ย/บิล (บาท)'}, inplace=True)
         
-        # ซ่อน index สีเทา
         st.dataframe(summary_table.style.format({
             'ยอดขายรวม (บาท)': '฿{:,.2f}', 
             'จำนวนบิล (ใบ)': '{:,.0f}', 
@@ -421,9 +417,10 @@ with tab_bestseller:
                 'BILL_NO': 'nunique'
             })
             summary_df.rename(columns={'PRODUCT_NAME': 'ชื่อสินค้า', 'UNIT': 'หน่วย', 'GRANDTOTAL': 'ยอดขายรวม', 'QTY': 'จำนวนที่ขาย', 'BILL_NO': 'บิลที่มีสินค้านี้'}, inplace=True)
+            
+            # --- แก้ไขส่วนสินค้าขายดี: สร้างคอลัมน์ ลำดับ แทรกด้านหน้า ---
             summary_df = summary_df.sort_values(by='จำนวนที่ขาย', ascending=False).reset_index(drop=True)
-            summary_df.index = summary_df.index + 1
-            summary_df = summary_df.reset_index().rename(columns={'index': 'ลำดับ'})
+            summary_df.insert(0, 'ลำดับ', range(1, len(summary_df) + 1))
             
             c1, c2 = st.columns([4.5, 5.5])
             with c1:
