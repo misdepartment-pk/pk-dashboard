@@ -558,10 +558,16 @@ with tab_bestseller:
                 st.plotly_chart(fig_prod, use_container_width=True)
             with c2:
                 st.markdown("##### ตารางรายการสินค้าขายดีทั้งหมด")
-                st.dataframe(summary_df.style.format({
-                    'ยอดขายรวม': '฿{:,.2f}', 
-                    'จำนวนที่ขาย': '{:,.2f}', 
-                    'บิลที่มีสินค้านี้': '{:,.0f}'
-                }), use_container_width=True, hide_index=True)
-        else: st.warning("ไม่พบข้อมูลรายการสินค้าในช่วงเวลาที่เลือก (หรือข้อมูลไม่สมบูรณ์)")
-    else: st.info("ไม่พบไฟล์ข้อมูลที่เกี่ยวกับสินค้า (Product Data) ในระบบ กรุณาตรวจสอบว่ามีไฟล์สำหรับสินค้านำเข้าแล้วหรือไม่")
+                st.dataframe(
+                    summary_df.style.format({
+                        'ยอดขายรวม': '฿{:,.2f}',
+                        'จำนวนที่ขาย': '{:,.0f}',
+                        'บิลที่มีสินค้านี้': '{:,.0f}'
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        else:
+            st.info("ไม่พบข้อมูลสินค้าขายดีตามเงื่อนไขที่เลือก")
+    else:
+        st.info("ไม่พบไฟล์ข้อมูลสินค้า (Product Data)")
