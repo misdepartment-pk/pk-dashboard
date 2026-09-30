@@ -36,9 +36,10 @@ st.markdown("""
     .metric-card {
         background-color: #ffffff; border-radius: 12px; padding: 16px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;
+        height: 100%;
     }
-    .metric-value { font-size: 28px; font-weight: 700; color: #1e293b; }
-    .metric-label { font-size: 14px; color: #64748b; margin-bottom: 4px; }
+    .metric-value { font-size: 26px; font-weight: 700; color: #1e293b; }
+    .metric-label { font-size: 13px; color: #64748b; margin-bottom: 4px; font-weight: 600; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
         height: 45px; white-space: pre-wrap; background-color: #ffffff;
@@ -254,7 +255,7 @@ with nav_col3: st.button("วันถัดไป ❯", on_click=go_next, use_c
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 6. DATA FILTERING
+# 6. DATA FILTERING & ALL-TIME HIGH ANALYSIS
 # ==========================================
 df_filtered = df_all.copy()
 if selected_years: df_filtered = df_filtered[df_filtered['Year_BE'].isin(selected_years)]
@@ -285,8 +286,31 @@ if quick_time != "ทั้งหมดในระบบ" and not df_filtered.e
     elif quick_time == "กำหนดเอง (เลือกปฏิทิน)" and start_date and end_date:
         df_filtered = df_filtered[(df_filtered['Parsed_Date'].dt.date >= start_date) & (df_filtered['Parsed_Date'].dt.date <= end_date)]
 
+# คำนวณสถิตียอดขายสูงสุดรายวันตลอดกาล (All-Time High) ตามสาขาที่เลือก
+df_history_branches = df_all[df_all['NAME'].isin(selected_branches)] if (selected_branches and not df_all.empty) else df_all.copy()
+
+if not df_history_branches.empty and not df_history_branches['Parsed_Date'].isna().all():
+    daily_all_history = df_history_branches.groupby(df_history_branches['Parsed_Date'].dt.date, as_index=False).agg({
+        'GRANDTOTAL': 'sum',
+        'ORDER_COUNT': 'sum'
+    }).sort_values(by='GRANDTOTAL', ascending=False)
+    
+    if not daily_all_history.empty:
+        ath_row = daily_all_history.iloc[0]
+        ath_sales = ath_row['GRANDTOTAL']
+        ath_date = ath_row['Parsed_Date']
+        ath_date_str = ath_date.strftime('%d/%m/%Y') if pd.notna(ath_date) else "-"
+    else:
+        ath_sales = 0
+        ath_date_str = "-"
+        daily_all_history = pd.DataFrame()
+else:
+    ath_sales = 0
+    ath_date_str = "-"
+    daily_all_history = pd.DataFrame()
+
 # ==========================================
-# 7. SUMMARY METRICS
+# 7. SUMMARY METRICS (4 COLUMNS)
 # ==========================================
 total_sales = df_filtered['GRANDTOTAL'].sum() if not df_filtered.empty else 0
 total_bills = df_filtered['ORDER_COUNT'].sum() if not df_filtered.empty else 0
@@ -299,18 +323,29 @@ if quick_time in ["ใช้วันที่จาก Date Navigator (ด้�
         diff_pct = ((total_sales - prev_sales) / prev_sales) * 100
         color = "#10b981" if diff_pct >= 0 else "#ef4444"
         arrow = "▲" if diff_pct >= 0 else "▼"
-        delta_sales_html = f"<div style='color: {color}; font-size: 14px; font-weight: 600; margin-top: 4px;'>{arrow} {diff_pct:.1f}% เทียบกับวันก่อนหน้า</div>"
+        delta_sales_html = f"<div style='color: {color}; font-size: 13px; font-weight: 600; margin-top: 4px;'>{arrow} {diff_pct:.1f}% เทียบกับวันก่อนหน้า</div>"
 
-col1, col2, col3 = st.columns(3)
-with col1: st.markdown(f"<div class='metric-card'><div class='metric-label'>ยอดขายรวมทั้งหมด (บาท)</div><div class='metric-value'>฿{total_sales:,.2f}</div>{delta_sales_html}</div>", unsafe_allow_html=True)
-with col2: st.markdown(f"<div class='metric-card'><div class='metric-label'>จำนวนบิล (นับจากจำนวนบรรทัด)</div><div class='metric-value'>{total_bills:,.0f}</div></div>", unsafe_allow_html=True)
-with col3: st.markdown(f"<div class='metric-card'><div class='metric-label'>ยอดเฉลี่ยต่อบิล (บาท)</div><div class='metric-value'>฿{avg_bill:,.2f}</div></div>", unsafe_allow_html=True)
+ath_diff_html = ""
+if ath_sales > 0 and total_sales > 0 and quick_time in ["ใช้วันที่จาก Date Navigator (ด้านบน)", "วันนี้", "เมื่อวาน"]:
+    pct_of_ath = (total_sales / ath_sales) * 100
+    ath_diff_html = f"<div style='color: #0284c7; font-size: 12px; font-weight: 600; margin-top: 4px;'>คิดเป็น {pct_of_ath:.1f}% ของสถิติสูงสุด</div>"
+
+col1, col2, col3, col4 = st.columns(4)
+with col1: 
+    st.markdown(f"<div class='metric-card'><div class='metric-label'>ยอดขายรวมช่วงที่เลือก (บาท)</div><div class='metric-value'>฿{total_sales:,.2f}</div>{delta_sales_html}</div>", unsafe_allow_html=True)
+with col2: 
+    st.markdown(f"<div class='metric-card'><div class='metric-label'>🏆 ยอดขายรายวันสูงสุด (ATH)</div><div class='metric-value' style='color: #dc2626;'>฿{ath_sales:,.2f}</div><div style='color: #475569; font-size: 12px; font-weight: 600;'>วันที่เกิดขึ้น: {ath_date_str}</div>{ath_diff_html}</div>", unsafe_allow_html=True)
+with col3: 
+    st.markdown(f"<div class='metric-card'><div class='metric-label'>จำนวนบิล (นับจากจำนวนบรรทัด)</div><div class='metric-value'>{total_bills:,.0f}</div></div>", unsafe_allow_html=True)
+with col4: 
+    st.markdown(f"<div class='metric-card'><div class='metric-label'>ยอดเฉลี่ยต่อบิล (บาท)</div><div class='metric-value'>฿{avg_bill:,.2f}</div></div>", unsafe_allow_html=True)
+
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
 # 8. TABS & VISUALIZATION
 # ==========================================
-tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
+tab_branch, tab_trend, tab_table, tab_bestseller = st.tabs(["🏢 ยอดรวมสาขา", "📈 เทรนด์รายวัน & เปรียบเทียบ ATH", "📋 ตารางตัวเลข", "🍜 สินค้าขายดี"])
 
 with tab_branch:
     if not df_filtered.empty:
@@ -343,15 +378,103 @@ with tab_trend:
     if not df_filtered.empty and not df_filtered['Parsed_Date'].isna().all():
         daily_sales = df_filtered.groupby(df_filtered['Parsed_Date'].dt.date, as_index=False)['GRANDTOTAL'].sum()
         daily_sales.columns = ['Date', 'Total_Sales']
-        if len(daily_sales) > 1:
-            fig_line = px.line(daily_sales.sort_values('Date'), x='Date', y='Total_Sales', markers=True)
-            fig_line.update_traces(line_color='#0ea5e9', marker=dict(size=8, color='#0284c7'))
-            fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)", height=400, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig_line, use_container_width=True)
-        else: st.info("มีข้อมูลเพียง 1 วัน ไม่สามารถสร้างกราฟแนวโน้มได้")
-    else: st.info("ไม่มีข้อมูลวันที่ที่สามารถสร้างกราฟได้")
+        daily_sales = daily_sales.sort_values('Date')
+        
+        st.markdown("##### 📈 แนวโน้มยอดขายรายวันเทียบกับสถิติสูงสุด (All-Time High)")
+        fig_line = px.line(daily_sales, x='Date', y='Total_Sales', markers=True)
+        fig_line.update_traces(line_color='#0ea5e9', marker=dict(size=8, color='#0284c7'))
+        
+        # เพิ่มเส้นอ้างอิง Horizontal Reference Line แสดงระดับ All-Time High
+        if ath_sales > 0:
+            fig_line.add_hline(
+                y=ath_sales,
+                line_dash="dash",
+                line_color="#ef4444",
+                annotation_text=f"All-Time High: ฿{ath_sales:,.2f} ({ath_date_str})",
+                annotation_position="top right",
+                annotation_font_color="#ef4444",
+                annotation_font_size=12
+            )
+            
+        fig_line.update_layout(xaxis_title="วันที่", yaxis_title="ยอดขาย (บาท)", height=420, margin=dict(l=10, r=10, t=30, b=10), plot_bgcolor='white', paper_bgcolor='white', yaxis=dict(showgrid=True, gridcolor='#f0f0f0'))
+        st.plotly_chart(fig_line, use_container_width=True)
+    else: 
+        st.info("ไม่มีข้อมูลวันที่ที่สามารถสร้างกราฟแนวโน้มได้")
 
-# --- การแก้ไข: ลำดับตารางตัวเลข ---
+    # --- ส่วนวิเคราะห์เจาะลึก: TOP 10 วันขายดีที่สุดในประวัติศาสตร์ ---
+    st.markdown("---")
+    st.markdown("#### 🏆 10 อันดับวันที่ขายดีที่สุดในประวัติศาสตร์ (Top 10 All-Time Sales Days)")
+    
+    if not daily_all_history.empty:
+        top10_days = daily_all_history.head(10).copy()
+        top10_days['Date_Str'] = top10_days['Parsed_Date'].apply(lambda d: d.strftime('%d/%m/%Y') if pd.notna(d) else "-")
+        top10_days['Pct_ATH'] = (top10_days['GRANDTOTAL'] / ath_sales) * 100 if ath_sales > 0 else 0
+        
+        # หาสาขาที่ขายดีที่สุดในแต่ละวันของ Top 10
+        top_branches = []
+        for d in top10_days['Parsed_Date']:
+            df_day = df_history_branches[df_history_branches['Parsed_Date'].dt.date == d]
+            if not df_day.empty:
+                b_sum = df_day.groupby('NAME')['GRANDTOTAL'].sum()
+                top_b = b_sum.idxmax() if not b_sum.empty else "-"
+            else: top_b = "-"
+            top_branches.append(top_b)
+        top10_days['Top_Branch'] = top_branches
+        
+        c_chart, c_table = st.columns([5, 5])
+        with c_chart:
+            top10_days_sorted = top10_days.sort_values(by='GRANDTOTAL', ascending=True)
+            fig_top_days = px.bar(
+                top10_days_sorted, 
+                x='GRANDTOTAL', 
+                y='Date_Str', 
+                orientation='h', 
+                text=top10_days_sorted['GRANDTOTAL'].apply(lambda v: f"฿{v:,.2f}"),
+                title="ยอดขายรวมในวันที่ทำสถิติสูงสุด",
+                color='GRANDTOTAL',
+                color_continuous_scale='Reds'
+            )
+            fig_top_days.update_traces(textposition='auto')
+            fig_top_days.update_layout(
+                yaxis_title="วันที่", 
+                xaxis_title="ยอดขาย (บาท)", 
+                height=450, 
+                showlegend=False,
+                coloraxis_showscale=False,
+                margin=dict(l=10, r=20, t=40, b=10)
+            )
+            st.plotly_chart(fig_top_days, use_container_width=True)
+            
+        with c_table:
+            st.markdown("##### 📊 ตารางวิเคราะห์เจาะลึกวันขายดีสูงสุด")
+            df_show_top = top10_days.copy()
+            df_show_top['Avg_Bill'] = np.where(df_show_top['ORDER_COUNT'] > 0, df_show_top['GRANDTOTAL'] / df_show_top['ORDER_COUNT'], 0)
+            
+            # แทรกคอลัมน์ ลำดับ ด้านหน้าสุด
+            df_show_top.insert(0, 'ลำดับ', range(1, len(df_show_top) + 1))
+            
+            df_show_top.rename(columns={
+                'Date_Str': 'วันที่',
+                'GRANDTOTAL': 'ยอดขายรวม (บาท)',
+                'ORDER_COUNT': 'จำนวนบิล',
+                'Avg_Bill': 'เฉลี่ย/บิล (บาท)',
+                'Top_Branch': 'สาขาขายดีสุด',
+                'Pct_ATH': '% เทียบ ATH'
+            }, inplace=True)
+            
+            st.dataframe(
+                df_show_top[['ลำดับ', 'วันที่', 'ยอดขายรวม (บาท)', 'จำนวนบิล', 'เฉลี่ย/บิล (บาท)', 'สาขาขายดีสุด', '% เทียบ ATH']].style.format({
+                    'ยอดขายรวม (บาท)': '฿{:,.2f}',
+                    'จำนวนบิล': '{:,.0f}',
+                    'เฉลี่ย/บิล (บาท)': '฿{:,.2f}',
+                    '% เทียบ ATH': '{:.1f}%'
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+    else:
+        st.info("ไม่พบข้อมูลประวัติยอดขายสูงสุด")
+
 with tab_table:
     if not df_filtered.empty:
         st.markdown("##### 📋 สรุปข้อมูลยอดขาย (รวมยอดตามวันและสาขา)")
@@ -361,16 +484,13 @@ with tab_table:
         summary_table['ยอดเฉลี่ย/บิล'] = np.where(summary_table['จำนวนบิล'] > 0, summary_table['ยอดขายรวม'] / summary_table['จำนวนบิล'], 0)
         summary_table = summary_table.sort_values(by=['Parsed_Date', 'ยอดขายรวม'], ascending=[False, False])
         
-        # รีเซ็ตตัวเลขให้เรียง 1, 2, 3...
-        summary_table = summary_table.reset_index(drop=True)
-        summary_table.index = summary_table.index + 1
-        summary_table = summary_table.reset_index().rename(columns={'index': 'ลำดับ'})
+        # สร้างคอลัมน์ ลำดับ แทรกด้านหน้า
+        summary_table.insert(0, 'ลำดับ', range(1, len(summary_table) + 1))
         
         if not summary_table['Parsed_Date'].isna().all(): 
             summary_table['Parsed_Date'] = summary_table['Parsed_Date'].dt.strftime('%d/%m/%Y')
         summary_table.rename(columns={'Parsed_Date': 'วันที่', 'NAME': 'สาขา', 'ยอดขายรวม': 'ยอดขายรวม (บาท)', 'จำนวนบิล': 'จำนวนบิล (ใบ)', 'ยอดเฉลี่ย/บิล': 'เฉลี่ย/บิล (บาท)'}, inplace=True)
         
-        # ซ่อน index สีเทา
         st.dataframe(summary_table.style.format({
             'ยอดขายรวม (บาท)': '฿{:,.2f}', 
             'จำนวนบิล (ใบ)': '{:,.0f}', 
@@ -421,9 +541,10 @@ with tab_bestseller:
                 'BILL_NO': 'nunique'
             })
             summary_df.rename(columns={'PRODUCT_NAME': 'ชื่อสินค้า', 'UNIT': 'หน่วย', 'GRANDTOTAL': 'ยอดขายรวม', 'QTY': 'จำนวนที่ขาย', 'BILL_NO': 'บิลที่มีสินค้านี้'}, inplace=True)
+            
+            # สร้างคอลัมน์ ลำดับ แทรกด้านหน้า
             summary_df = summary_df.sort_values(by='จำนวนที่ขาย', ascending=False).reset_index(drop=True)
-            summary_df.index = summary_df.index + 1
-            summary_df = summary_df.reset_index().rename(columns={'index': 'ลำดับ'})
+            summary_df.insert(0, 'ลำดับ', range(1, len(summary_df) + 1))
             
             c1, c2 = st.columns([4.5, 5.5])
             with c1:
@@ -437,10 +558,16 @@ with tab_bestseller:
                 st.plotly_chart(fig_prod, use_container_width=True)
             with c2:
                 st.markdown("##### ตารางรายการสินค้าขายดีทั้งหมด")
-                st.dataframe(summary_df.style.format({
-                    'ยอดขายรวม': '฿{:,.2f}', 
-                    'จำนวนที่ขาย': '{:,.2f}', 
-                    'บิลที่มีสินค้านี้': '{:,.0f}'
-                }), use_container_width=True, hide_index=True)
-        else: st.warning("ไม่พบข้อมูลรายการสินค้าในช่วงเวลาที่เลือก (หรือข้อมูลไม่สมบูรณ์)")
-    else: st.info("ไม่พบไฟล์ข้อมูลที่เกี่ยวกับสินค้า (Product Data) ในระบบ กรุณาตรวจสอบว่ามีไฟล์สำหรับสินค้านำเข้าแล้วหรือไม่")
+                st.dataframe(
+                    summary_df.style.format({
+                        'ยอดขายรวม': '฿{:,.2f}',
+                        'จำนวนที่ขาย': '{:,.0f}',
+                        'บิลที่มีสินค้านี้': '{:,.0f}'
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        else:
+            st.info("ไม่พบข้อมูลสินค้าขายดีตามเงื่อนไขที่เลือก")
+    else:
+        st.info("ไม่พบไฟล์ข้อมูลสินค้า (Product Data)")
